@@ -78,3 +78,14 @@ async def test_on_message_multi_flow():
     m = msg("c do cs 373 hw"); await bot.on_message(m)
     assert m.reply.call_args.args[0] == "Added **Do cs 373 hw** to 🟦 **CS 373**"
     await bot.close()
+
+
+def test_charles_trigger_word():
+    from charles.bot import task_text
+    t = "c,charles"
+    assert task_text("charles do cs 373 hw", 1, t) == "do cs 373 hw"
+    assert task_text("Charles, apply to citadel", 1, t) == "apply to citadel"
+    assert task_text("c do cs 373 hw", 1, t) == "do cs 373 hw"
+    assert task_text("charlesworth is cool", 1, t) is None
+    assert control_command("charles multi", t) == "multi"
+    assert control_command("Charles end", t) == "end"

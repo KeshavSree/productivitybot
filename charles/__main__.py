@@ -27,7 +27,7 @@ def main() -> None:
 
     store = Store(Path(os.getenv("DATA_DIR", "./data")) / "charles.db")
     bot = Charles(TaskService(store, notion), env_int("TASK_CHANNEL_ID"), env_ids("ALLOWED_USER_IDS"), env_int("GUILD_ID"),
-                  os.getenv("TRIGGER_WORD", "c").strip())
+                  os.getenv("TRIGGER_WORD", "c,charles").strip())
     bot.run(token, log_handler=None)
 
 

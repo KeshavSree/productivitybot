@@ -229,11 +229,18 @@ class AddModal(discord.ui.Modal, title="Add tasks"):
 
 # ---- the bot -------------------------------------------------------------------
 
+def _trigger_re(trigger: str) -> str | None:
+    """"c,charles" -> a regex matching either word (longest first, so "charles" isn't read as "c")."""
+    words = sorted({w.strip() for w in trigger.split(",") if w.strip()}, key=len, reverse=True)
+    return "(?:" + "|".join(map(re.escape, words)) + ")" if words else None
+
+
 def control_command(content: str, trigger: str) -> str | None:
     """"c multi" starts listening mode, "c end" stops it."""
-    if not trigger:
+    t = _trigger_re(trigger)
+    if not t:
         return None
-    m = re.fullmatch(rf"\s*{re.escape(trigger)}\s*[:,]?\s*(multi|end|stop)\s*", content, re.IGNORECASE)
+    m = re.fullmatch(rf"\s*{t}\s*[:,]?\s*(multi|end|stop)\s*", content, re.IGNORECASE)
     if not m:
         return None
     return "multi" if m.group(1).lower() == "multi" else "end"
@@ -242,14 +249,16 @@ def control_command(content: str, trigger: str) -> str | None:
 def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
     """Return the task text if this message is meant for Charles, else None.
 
-    A message is for Charles if it starts with the trigger word ("c do cs 373 hw",
+    A message is for Charles if it starts with a trigger word ("c do cs 373 hw",
+    "charles do cs 373 hw",
     "c: ...", "C, ..."), mentions the bot, or (with always=True) is in a DM or
     the tasks channel.
     """
     mention = re.compile(rf"<@!?{bot_id}>")
     mentioned = bool(mention.search(content))
     text = mention.sub("", content).strip()
-    m = re.match(rf"^{re.escape(trigger)}(?:\s*[:,]\s*|\s+)(.+)", text, re.IGNORECASE | re.DOTALL) if trigger else None
+    t = _trigger_re(trigger)
+    m = re.match(rf"^{t}(?:\s*[:,]\s*|\s+)(.+)", text, re.IGNORECASE | re.DOTALL) if t else None
     if m:
         return m.group(1).strip() or None
     if mentioned or always:
@@ -259,7 +268,7 @@ def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> 
 
 class Charles(commands.Bot):
     def __init__(self, svc: TaskService, task_channel_id: int | None, allowed: set[int], guild_id: int | None,
-                 trigger: str = "c"):
+                 trigger: str = "c,charles"):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
@@ -310,7 +319,7 @@ class Charles(commands.Bot):
             self.listening.add(key)
             await message.add_reaction("👂")
             return await message.reply(
-                f"Listening. Every message you send here is a task until you say `{self.trigger} end`.",
+                f"Listening. Every message you send here is a task until you say `{self.trigger.split(',')[0].strip()} end`.",
                 mention_author=False)
         if cmd == "end":
             if key in self.listening:
