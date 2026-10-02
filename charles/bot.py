@@ -174,21 +174,14 @@ def _fits(ids: list[int], prefix: str) -> list[int]:
     return out
 
 
-def added_view(added: list[Added]) -> discord.ui.View:
+def added_view(added: list[Added]) -> discord.ui.View | None:
+    """Only tasks that landed in Inbox get a menu; everything else is just the one-line reply."""
+    inbox = [a.task for a in added if a.task.category == INBOX]
+    if not inbox:
+        return None
     view = discord.ui.View(timeout=None)
-    tasks = [a.task for a in added]
-    inbox = [t for t in tasks if t.category == INBOX]
-    rows_left = 5
-    for t in inbox[:3]:
+    for t in inbox[:5]:
         view.add_item(CategorySelect(t.id, f"Where does “{short(t.content, 60)}” go?"))
-        rows_left -= 1
-    sorted_tasks = [t for t in tasks if t.category != INBOX]
-    if sorted_tasks and rows_left > 1:
-        keep = set(_fits([t.id for t in sorted_tasks[:25]], "charles:fix:"))
-        view.add_item(FixPicker([t for t in sorted_tasks if t.id in keep]))
-    ids = _fits([t.id for t in tasks], "charles:undo:")
-    if ids:
-        view.add_item(UndoButton(ids))
     return view
 
 
@@ -203,13 +196,22 @@ def list_view(tasks: list[Task]) -> discord.ui.View | None:
     return view
 
 
-def added_summary(added: list[Added]) -> tuple[str, discord.Embed]:
-    tasks = [a.task for a in added]
-    inbox = sum(t.category == INBOX for t in tasks)
-    msg = f"Added {len(tasks)} task{'s' if len(tasks) != 1 else ''} to Notion."
-    if inbox:
-        msg += f" I wasn't sure about {inbox}, so {'it is' if inbox == 1 else 'they are'} in Inbox. Pick a category below and I'll learn from it."
-    return msg, grouped_embed("Sorted", tasks)
+def added_summary(added: list[Added]) -> str:
+    lines = []
+    for a in added:
+        t = a.task
+        line = f"Added **{short(t.content, 200)}** to {emoji(t.category)} **{t.category}**"
+        if t.category == INBOX:
+            line += " (pick a category below)"
+        lines.append(line)
+    return "\n".join(lines)[:2000]
+
+
+async def send_added(send, added: list[Added], **kwargs) -> None:
+    view = added_view(added)
+    if view:
+        kwargs["view"] = view
+    await send(added_summary(added), **kwargs)
 
 
 class AddModal(discord.ui.Modal, title="Add tasks"):
@@ -222,11 +224,20 @@ class AddModal(discord.ui.Modal, title="Add tasks"):
         added = await service(interaction).add_from_text(interaction.user.id, self.text.value)
         if not added:
             return await interaction.followup.send("I couldn't find any tasks in that.")
-        msg, embed = added_summary(added)
-        await interaction.followup.send(msg, embed=embed, view=added_view(added))
+        await send_added(interaction.followup.send, added)
 
 
 # ---- the bot -------------------------------------------------------------------
+
+def control_command(content: str, trigger: str) -> str | None:
+    """"c multi" starts listening mode, "c end" stops it."""
+    if not trigger:
+        return None
+    m = re.fullmatch(rf"\s*{re.escape(trigger)}\s*[:,]?\s*(multi|end|stop)\s*", content, re.IGNORECASE)
+    if not m:
+        return None
+    return "multi" if m.group(1).lower() == "multi" else "end"
+
 
 def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
     """Return the task text if this message is meant for Charles, else None.
@@ -257,6 +268,7 @@ class Charles(commands.Bot):
         self.allowed = allowed
         self.guild_id = guild_id
         self.trigger = trigger
+        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "c multi" mode
         self.tree.interaction_check = self._allowed_interaction  # type: ignore[method-assign]
 
     def is_allowed(self, user: discord.abc.User) -> bool:
@@ -292,16 +304,31 @@ class Charles(commands.Bot):
     async def on_message(self, message: discord.Message):
         if message.author.bot or not self.is_allowed(message.author):
             return
+        key = (message.author.id, message.channel.id)
+        cmd = control_command(message.content, self.trigger)
+        if cmd == "multi":
+            self.listening.add(key)
+            await message.add_reaction("👂")
+            return await message.reply(
+                f"Listening. Every message you send here is a task until you say `{self.trigger} end`.",
+                mention_author=False)
+        if cmd == "end":
+            if key in self.listening:
+                self.listening.discard(key)
+                await message.add_reaction("👍")
+                await message.reply("Stopped listening.", mention_author=False)
+            return
+
         in_dm = isinstance(message.channel, discord.DMChannel)
         in_task_channel = bool(self.task_channel_id and message.channel.id == self.task_channel_id)
-        text = task_text(message.content, self.user.id, self.trigger, always=in_dm or in_task_channel)
+        always = in_dm or in_task_channel or key in self.listening
+        text = task_text(message.content, self.user.id, self.trigger, always=always)
         if not text:
             return
-        async with message.channel.typing():
-            added = await self.service.add_from_text(message.author.id, text)
+        added = await self.service.add_from_text(message.author.id, text)
         if added:
-            msg, embed = added_summary(added)
-            await message.reply(msg, embed=embed, view=added_view(added), mention_author=False)
+            await message.add_reaction("👍")
+            await send_added(message.reply, added, mention_author=False)
 
 
 def register_commands(tree: app_commands.CommandTree):
@@ -314,8 +341,7 @@ def register_commands(tree: app_commands.CommandTree):
         added = await service(interaction).add_from_text(interaction.user.id, text)
         if not added:
             return await interaction.followup.send("I couldn't find any tasks in that.")
-        msg, embed = added_summary(added)
-        await interaction.followup.send(msg, embed=embed, view=added_view(added))
+        await send_added(interaction.followup.send, added)
 
     @tree.command(name="list", description="Show your open tasks, tick them off or move them")
     @app_commands.choices(category=CATEGORY_CHOICES)
