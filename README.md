@@ -26,7 +26,7 @@ Categories, colors and rules live in `charles/categories.py`.
 
 | What | How |
 | --- | --- |
-| Add tasks | Type in your tasks channel, DM Charles, or @mention it. Or `/add` (opens a box for several lines). |
+| Add tasks | Start a message with `c` in any channel (`c do cs 373 hw`), type in your tasks channel, DM Charles, or @mention it. Or `/add` (opens a box for several lines). |
 | Fix a category | Use the "Wrong category?" menu under the bot's reply, or `/list`. |
 | Undo | The Undo button under the bot's reply. |
 | See / finish tasks | `/list` (optionally one category), then "Mark done". |

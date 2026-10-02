@@ -26,7 +26,8 @@ def main() -> None:
         logging.warning("NOTION_TOKEN or NOTION_DATABASE_ID missing; tasks will only be saved locally")
 
     store = Store(Path(os.getenv("DATA_DIR", "./data")) / "charles.db")
-    bot = Charles(TaskService(store, notion), env_int("TASK_CHANNEL_ID"), env_ids("ALLOWED_USER_IDS"), env_int("GUILD_ID"))
+    bot = Charles(TaskService(store, notion), env_int("TASK_CHANNEL_ID"), env_ids("ALLOWED_USER_IDS"), env_int("GUILD_ID"),
+                  os.getenv("TRIGGER_WORD", "c").strip())
     bot.run(token, log_handler=None)
 
 
