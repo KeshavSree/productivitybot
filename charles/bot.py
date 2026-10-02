@@ -228,8 +228,27 @@ class AddModal(discord.ui.Modal, title="Add tasks"):
 
 # ---- the bot -------------------------------------------------------------------
 
+def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
+    """Return the task text if this message is meant for Charles, else None.
+
+    A message is for Charles if it starts with the trigger word ("c do cs 373 hw",
+    "c: ...", "C, ..."), mentions the bot, or (with always=True) is in a DM or
+    the tasks channel.
+    """
+    mention = re.compile(rf"<@!?{bot_id}>")
+    mentioned = bool(mention.search(content))
+    text = mention.sub("", content).strip()
+    m = re.match(rf"^{re.escape(trigger)}(?:\s*[:,]\s*|\s+)(.+)", text, re.IGNORECASE | re.DOTALL) if trigger else None
+    if m:
+        return m.group(1).strip() or None
+    if mentioned or always:
+        return text or None
+    return None
+
+
 class Charles(commands.Bot):
-    def __init__(self, svc: TaskService, task_channel_id: int | None, allowed: set[int], guild_id: int | None):
+    def __init__(self, svc: TaskService, task_channel_id: int | None, allowed: set[int], guild_id: int | None,
+                 trigger: str = "c"):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
@@ -237,6 +256,7 @@ class Charles(commands.Bot):
         self.task_channel_id = task_channel_id
         self.allowed = allowed
         self.guild_id = guild_id
+        self.trigger = trigger
         self.tree.interaction_check = self._allowed_interaction  # type: ignore[method-assign]
 
     def is_allowed(self, user: discord.abc.User) -> bool:
@@ -273,11 +293,8 @@ class Charles(commands.Bot):
         if message.author.bot or not self.is_allowed(message.author):
             return
         in_dm = isinstance(message.channel, discord.DMChannel)
-        in_task_channel = self.task_channel_id and message.channel.id == self.task_channel_id
-        mentioned = self.user in message.mentions
-        if not (in_dm or in_task_channel or mentioned):
-            return
-        text = re.sub(rf"<@!?{self.user.id}>", "", message.content).strip()
+        in_task_channel = bool(self.task_channel_id and message.channel.id == self.task_channel_id)
+        text = task_text(message.content, self.user.id, self.trigger, always=in_dm or in_task_channel)
         if not text:
             return
         async with message.channel.typing():

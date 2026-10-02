@@ -22,3 +22,17 @@ async def test_views_build_and_respect_limits():
     lv = list_view(svc.store.open_tasks(1))
     assert len(lv.to_components()) == 2
     assert list_view([]) is None
+
+
+def test_trigger_word():
+    from charles.bot import task_text
+    bot = 999
+    assert task_text("c do cs 373 hw", bot, "c") == "do cs 373 hw"
+    assert task_text("C: apply to citadel", bot, "c") == "apply to citadel"
+    assert task_text("c, stack standup\ncs 211 lab", bot, "c") == "stack standup\ncs 211 lab"
+    assert task_text("<@999> grind leetcode", bot, "c") == "grind leetcode"
+    assert task_text("cool, see you later", bot, "c") is None
+    assert task_text("cs 373 hw", bot, "c") is None
+    assert task_text("c", bot, "c") is None
+    assert task_text("cs 373 hw", bot, "c", always=True) == "cs 373 hw"
+    assert task_text("c cs 373 hw", bot, "c", always=True) == "cs 373 hw"
