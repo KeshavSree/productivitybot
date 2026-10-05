@@ -230,13 +230,33 @@ class AddModal(discord.ui.Modal, title="Add tasks"):
 # ---- the bot -------------------------------------------------------------------
 
 def control_command(content: str, trigger: str) -> str | None:
-    """"c multi" starts listening mode, "c end" stops it."""
+    """"c listen" starts listening mode, "c end" stops it."""
     if not trigger:
         return None
-    m = re.fullmatch(rf"\s*{re.escape(trigger)}\s*[:,]?\s*(multi|end|stop)\s*", content, re.IGNORECASE)
+    m = re.fullmatch(rf"\s*{re.escape(trigger)}\s*[:,]?\s*(listen|end|stop)\s*", content, re.IGNORECASE)
     if not m:
         return None
-    return "multi" if m.group(1).lower() == "multi" else "end"
+    return "listen" if m.group(1).lower() == "listen" else "end"
+
+
+def completion_text(content: str) -> str | None:
+    """Extract a task name from a clear natural-language completion statement."""
+    text = content.strip().rstrip(".!? ")
+    patterns = (
+        r"^(?P<task>.+?)\s+(?:(?:is|was)\s+)?(?:done|finished|complete|completed)$",
+        r"^(?:finished|completed)\s+(?P<task>.+)$",
+        r"^done\s+with\s+(?P<task>.+)$",
+    )
+    for pattern in patterns:
+        match = re.fullmatch(pattern, text, re.IGNORECASE)
+        if match:
+            task = match.group("task").strip(" \t.,!?\"'“”‘’")
+            return task or None
+    return None
+
+
+def normalize_task_name(text: str) -> str:
+    return " ".join(re.findall(r"\w+", text.casefold()))
 
 
 def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
@@ -268,7 +288,7 @@ class Charles(commands.Bot):
         self.allowed = allowed
         self.guild_id = guild_id
         self.trigger = trigger
-        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "c multi" mode
+        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "c listen" mode
         self.tree.interaction_check = self._allowed_interaction  # type: ignore[method-assign]
 
     def is_allowed(self, user: discord.abc.User) -> bool:
@@ -306,7 +326,7 @@ class Charles(commands.Bot):
             return
         key = (message.author.id, message.channel.id)
         cmd = control_command(message.content, self.trigger)
-        if cmd == "multi":
+        if cmd == "listen":
             self.listening.add(key)
             await message.add_reaction("👂")
             return await message.reply(
@@ -318,6 +338,26 @@ class Charles(commands.Bot):
                 await message.add_reaction("👍")
                 await message.reply("Stopped listening.", mention_author=False)
             return
+
+        completed_name = completion_text(message.content)
+        if completed_name:
+            normalized = normalize_task_name(completed_name)
+            matches = [t for t in self.service.store.open_tasks(message.author.id)
+                       if normalize_task_name(t.content) == normalized]
+            if len(matches) == 1:
+                task = await self.service.complete(matches[0].id)
+                if task:
+                    await message.add_reaction("✅")
+                    return await message.reply(
+                        f"Marked **{short(task.content)}** complete.", mention_author=False)
+            elif len(matches) > 1:
+                return await message.reply(
+                    f"I found multiple open tasks named **{short(completed_name)}**. Use `/list` to choose one.",
+                    mention_author=False)
+            else:
+                return await message.reply(
+                    f"I couldn't find an open task named **{short(completed_name)}**.",
+                    mention_author=False)
 
         in_dm = isinstance(message.channel, discord.DMChannel)
         in_task_channel = bool(self.task_channel_id and message.channel.id == self.task_channel_id)
@@ -383,4 +423,3 @@ def env_int(name: str) -> int | None:
 
 def env_ids(name: str) -> set[int]:
     return {int(x) for x in os.getenv(name, "").replace(" ", "").split(",") if x}
-
