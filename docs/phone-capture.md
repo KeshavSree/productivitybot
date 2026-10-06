@@ -6,9 +6,14 @@ sends text, not audio; Siri/Shortcuts handles dictation. No native iOS app is ne
 ## 1. Enable the deployed API
 
 Railway deploys this repository as one process running Discord, HTTP, and the
-Notion sync worker together. Keep one replica and the existing persistent volume
-with `DATA_DIR=/data`; the task database, sync queue, and capture receipts all live
-in `/data/charles.db`.
+Notion sync worker together. Keep one replica and attach a persistent volume at
+`/data` with `DATA_DIR=/data`; the task database, sync queue, and capture receipts
+all live in `/data/charles.db`.
+
+Creating the `/data` directory does not create a persistent Railway volume.
+Before redeploying an existing worker without a volume, back up its database
+using SQLite's backup API. A newly attached volume starts empty, so restore that
+backup before resuming task capture. Keep the database backup out of Git.
 
 Add these variables to the existing Railway service:
 
