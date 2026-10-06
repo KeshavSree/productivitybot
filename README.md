@@ -78,12 +78,34 @@ python -m charles
    optional ones from `.env.example`. Set `DATA_DIR=/data`.
 3. **Add a Volume** to the service, mount path `/data` (so learned keywords and
    corrections survive redeploys).
-4. Deploy. `railway.json` starts `python -m charles` and restarts it if it crashes.
-   It runs as a worker, so it doesn't need a public domain. Cost is about $5/month on
-   the Hobby plan.
+4. Deploy. `railway.json` starts `python -m charles`, checks `/health`, and restarts
+   it if it crashes. Discord works without a public domain; phone capture needs
+   a public HTTPS domain pointing to the HTTP server's port.
 
 Alternatives: a free-tier Oracle Cloud VM or any always-on box with
 `python -m charles` under systemd; Fly.io also works with a volume.
+
+## Phone capture: Siri and the Lock Screen
+
+Charles also runs an authenticated `POST /capture` endpoint alongside Discord.
+Both entrances call the same Python task handler; the phone sends dictated text,
+and Discord calls the handler directly. Completion statements work through both.
+
+Set `CAPTURE_TOKEN` and `CAPTURE_USER_ID` in Railway and generate a public HTTPS
+domain. Until both variables are configured, phone capture is disabled and
+Discord continues working. Keep one replica and the `/data` volume for durable
+tasks, capture request IDs, and the Notion sync queue. `GET /health` is the
+deployment healthcheck.
+
+See [the phone capture setup guide](docs/phone-capture.md) for the exact variables,
+API contract, and one Shortcut named Charles that can be launched through Siri
+or a Lock Screen control. The Shortcut requires setup and permissions on your
+iPhone; this repository does not install it remotely.
+
+Notion updates retry on local changes and every 30 seconds. Charles adds a
+`Charles ID` property to the board to recover pages after a lost creation response.
+Captures are saved locally before the API responds; its response distinguishes
+pending sync from a task already synced to Notion.
 
 ## Development
 ```bash

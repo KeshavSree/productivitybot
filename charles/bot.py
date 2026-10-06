@@ -9,7 +9,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from .categories import BY_NAME, CATEGORIES, INBOX
-from .core import Added, TaskService
+from .core import Added, TaskService, completion_text
 from .store import Task
 
 log = logging.getLogger(__name__)
@@ -239,25 +239,6 @@ def control_command(content: str, trigger: str) -> str | None:
     return "listen" if m.group(1).lower() == "listen" else "end"
 
 
-def completion_text(content: str) -> str | None:
-    """Extract a task name from a clear natural-language completion statement."""
-    text = content.strip().rstrip(".!? ")
-    patterns = (
-        r"^(?P<task>.+?)\s+(?:(?:is|was)\s+)?(?:done|finished|complete|completed)$",
-        r"^(?:finished|completed)\s+(?P<task>.+)$",
-        r"^done\s+with\s+(?P<task>.+)$",
-    )
-    for pattern in patterns:
-        match = re.fullmatch(pattern, text, re.IGNORECASE)
-        if match:
-            task = match.group("task").strip(" \t.,!?\"'“”‘’")
-            return task or None
-    return None
-
-
-def normalize_task_name(text: str) -> str:
-    return " ".join(re.findall(r"\w+", text.casefold()))
-
 
 def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
     """Return the task text if this message is meant for Charles, else None.
@@ -303,14 +284,6 @@ class Charles(commands.Bot):
     async def setup_hook(self):
         self.add_dynamic_items(CategorySelect, FixPicker, DoneSelect, UndoButton)
         register_commands(self.tree)
-        if self.service.notion:
-            try:
-                await self.service.notion.ensure_schema()
-                n = await self.service.sync_pending()
-                if n:
-                    log.info("Retried %d tasks that hadn't reached Notion", n)
-            except Exception:
-                log.exception("Notion check failed; tasks will still be saved locally")
         if self.guild_id:
             guild = discord.Object(id=self.guild_id)
             self.tree.copy_global_to(guild=guild)
@@ -339,36 +312,32 @@ class Charles(commands.Bot):
                 await message.reply("Stopped listening.", mention_author=False)
             return
 
-        completed_name = completion_text(message.content)
-        if completed_name:
-            normalized = normalize_task_name(completed_name)
-            matches = [t for t in self.service.store.open_tasks(message.author.id)
-                       if normalize_task_name(t.content) == normalized]
-            if len(matches) == 1:
-                task = await self.service.complete(matches[0].id)
-                if task:
-                    await message.add_reaction("✅")
-                    return await message.reply(
-                        f"Marked **{short(task.content)}** complete.", mention_author=False)
-            elif len(matches) > 1:
-                return await message.reply(
-                    f"I found multiple open tasks named **{short(completed_name)}**. Use `/list` to choose one.",
-                    mention_author=False)
-            else:
-                return await message.reply(
-                    f"I couldn't find an open task named **{short(completed_name)}**.",
-                    mention_author=False)
-
         in_dm = isinstance(message.channel, discord.DMChannel)
         in_task_channel = bool(self.task_channel_id and message.channel.id == self.task_channel_id)
         always = in_dm or in_task_channel or key in self.listening
         text = task_text(message.content, self.user.id, self.trigger, always=always)
+        # Bare completion statements retain their existing any-channel behavior.
+        if not text and completion_text(message.content):
+            text = message.content
         if not text:
             return
-        added = await self.service.add_from_text(message.author.id, text)
-        if added:
-            await message.add_reaction("👍")
-            await send_added(message.reply, added, mention_author=False)
+        result = await self.service.handle_text(message.author.id, text)
+        if result.action == "empty":
+            return
+        if result.tasks:
+            await message.add_reaction("✅" if result.action == "completed" else "👍")
+        summary = result.message
+        if result.action == "added":
+            summary = added_summary(result.added)
+        elif result.action == "completed":
+            summary = "\n".join(f"Marked **{short(t.content)}** complete." for t in result.tasks)
+        if self.service.sync_status(result.tasks) == "pending":
+            summary += "\nSaved; Notion sync is pending."
+        kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}
+        view = added_view(result.added)
+        if view:
+            kwargs["view"] = view
+        await message.reply(summary[:2000], **kwargs)
 
 
 def register_commands(tree: app_commands.CommandTree):

@@ -15,6 +15,7 @@ VERSION = "2022-06-28"
 TITLE_PROP = "Task"
 CATEGORY_PROP = "Category"
 DONE_PROP = "Done"
+SOURCE_PROP = "Charles ID"
 
 
 class NotionError(RuntimeError):
@@ -34,7 +35,7 @@ class Notion:
 
     async def _http(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(headers={
+            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10), headers={
                 "Authorization": f"Bearer {self.token}",
                 "Notion-Version": VERSION,
                 "Content-Type": "application/json",
@@ -64,6 +65,7 @@ class Notion:
                 TITLE_PROP: {"title": {}},
                 CATEGORY_PROP: {"select": {"options": category_options()}},
                 DONE_PROP: {"checkbox": {}},
+                SOURCE_PROP: {"rich_text": {}},
             },
         })
         self.database_id = data["id"]
@@ -76,6 +78,10 @@ class Notion:
         missing = [k for k in (TITLE_PROP, CATEGORY_PROP, DONE_PROP) if k not in props]
         if missing:
             raise NotionError(f"Database is missing properties {missing}; run scripts/setup_notion.py")
+        if SOURCE_PROP not in props:
+            await self._req("PATCH", f"/databases/{self.database_id}", {
+                "properties": {SOURCE_PROP: {"rich_text": {}}},
+            })
         existing = {o["name"] for o in props[CATEGORY_PROP]["select"]["options"]}
         new = [o for o in category_options() if o["name"] not in existing]
         if new:
@@ -86,16 +92,33 @@ class Notion:
 
     # ---- tasks -----------------------------------------------------------------
 
-    async def add_task(self, content: str, category: str) -> str:
+    async def find_task(self, source_id: str) -> str | None:
+        """Recover a successful creation whose response was lost before local save."""
+        data = await self._req("POST", f"/databases/{self.database_id}/query", {
+            "filter": {"property": SOURCE_PROP, "rich_text": {"equals": source_id}},
+            "page_size": 1,
+        })
+        return data["results"][0]["id"] if data["results"] else None
+
+    async def add_task(self, content: str, category: str, source_id: str | None = None) -> str:
+        properties = {
+            TITLE_PROP: {"title": [{"text": {"content": content[:2000]}}]},
+            CATEGORY_PROP: {"select": {"name": category}},
+            DONE_PROP: {"checkbox": False},
+        }
+        if source_id:
+            properties[SOURCE_PROP] = {"rich_text": [{"text": {"content": source_id}}]}
         data = await self._req("POST", "/pages", {
             "parent": {"database_id": self.database_id},
-            "properties": {
-                TITLE_PROP: {"title": [{"text": {"content": content[:2000]}}]},
-                CATEGORY_PROP: {"select": {"name": category}},
-                DONE_PROP: {"checkbox": False},
-            },
+            "properties": properties,
         })
         return data["id"]
+
+    async def update_task(self, page_id: str, category: str, done: bool) -> None:
+        await self._req("PATCH", f"/pages/{page_id}", {"properties": {
+            CATEGORY_PROP: {"select": {"name": category}},
+            DONE_PROP: {"checkbox": done},
+        }})
 
     async def set_category(self, page_id: str, category: str) -> None:
         await self._req("PATCH", f"/pages/{page_id}", {
