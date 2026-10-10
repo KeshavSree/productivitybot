@@ -30,9 +30,19 @@ Categories, colors and rules live in `charles/categories.py`.
 | Add a bunch | `c listen`, then every message you send in that channel is a task until `c end`. |
 | Fix a category | `/list` → "Move a task to another category". Inbox tasks get a menu right in the reply. |
 | See / finish tasks | `/list` (optionally one category), then "Mark done". |
-| Mark a task done in chat | Say `write the report is done`, `write the report finished`, or `finished write the report`. The task name must match an open task. |
+| Mark a task done in chat | Say `write the report is done`, `write the report finished`, or `finished write the report`. Small typos and reordered words can match an open task; close candidates need clarification. |
 | Teach a word | `/keyword category word` |
 | See the rules | `/categories` |
+
+Completion searches only your own open tasks. Exact matches take precedence;
+otherwise Charles compares letter similarity and word order using
+[RapidFuzz](https://rapidfuzz.github.io/RapidFuzz/Usage/fuzz.html). A fuzzy match
+needs at least 88/100 similarity and an 8-point lead over the next candidate.
+For example, `urban video interview is done` can match `Do urbn video interview`.
+Numbers must match, so `homework 2` cannot complete `homework 3`, and leaving out
+an assignment number requires clarification by supplying it. Close matches return
+candidate names; weak matches return "not found". Neither creates a new task.
+`complete X` still adds a task; `X is complete` completes one.
 
 ## Setup
 

@@ -5,12 +5,19 @@ import logging
 import re
 from dataclasses import asdict, dataclass, field
 
+from rapidfuzz import fuzz
+
 from .classifier import Classifier, Result
 from .notion import Notion
 from .parser import parse, split_tasks
 from .store import Store, Task
 
 log = logging.getLogger(__name__)
+
+# Similarity scores, not probabilities. Require both a strong title match and
+# separation from the next candidate before changing a task automatically.
+COMPLETION_SCORE_MIN = 88.0
+COMPLETION_SCORE_MARGIN = 8.0
 
 
 @dataclass
@@ -58,8 +65,8 @@ def normalize_task_name(text: str) -> str:
 
 
 def _spoken_name(text: str) -> str:
-    # Only predictable variations: never fuzzy-match a different assignment/number.
-    text = re.sub(r"\b(cs|stat)\s*(\d+)\b", r"\1 \2", text.casefold())
+    # Separate numbers from words so CS373 and hw2 work like CS 373 and hw 2.
+    text = re.sub(r"(?<=[^\W\d_])(?=\d)|(?<=\d)(?=[^\W\d_])", " ", text.casefold())
     words = normalize_task_name(text).split()
     if words and words[0] in {"do", "finish", "complete"}:
         words.pop(0)
@@ -67,11 +74,39 @@ def _spoken_name(text: str) -> str:
 
 
 def matching_tasks(name: str, tasks: list[Task]) -> list[Task]:
+    """Return one confident match, multiple close matches, or no safe match.
+
+    Literal/normalized matches take precedence. Fuzzy comparisons use the entire
+    title, with and without word ordering; a shared fragment alone isn't enough.
+    Numeric tokens must agree, including their count, so omitted or mistyped
+    assignment numbers never silently choose a different task.
+    """
     exact = [t for t in tasks if normalize_task_name(t.content) == normalize_task_name(name)]
     if exact:
         return exact
     spoken = _spoken_name(name)
-    return [t for t in tasks if spoken and _spoken_name(t.content) == spoken]
+    normalized = [(t, _spoken_name(t.content)) for t in tasks]
+    exact = [t for t, title in normalized if spoken and title == spoken]
+    if exact:
+        return exact
+    # Tiny names have too little information for typo matching.
+    if len(spoken.replace(" ", "")) < 4:
+        return []
+    numbers = sorted(re.findall(r"\d+", spoken))
+    ranked = sorted(
+        ((max(fuzz.ratio(spoken, title), fuzz.token_sort_ratio(spoken, title)), t)
+         for t, title in normalized
+         if title and sorted(re.findall(r"\d+", title)) == numbers),
+        key=lambda item: (-item[0], item[1].id),
+    )
+    if not ranked or ranked[0][0] < COMPLETION_SCORE_MIN:
+        return []
+    best_score, best_task = ranked[0]
+    if len(ranked) > 1 and best_score - ranked[1][0] < COMPLETION_SCORE_MARGIN:
+        # Include close runners-up even below the score minimum: they still
+        # make the leading candidate unsafe to complete without clarification.
+        return [task for score, task in ranked if best_score - score < COMPLETION_SCORE_MARGIN]
+    return [best_task]
 
 
 class TaskService:
@@ -105,7 +140,11 @@ class TaskService:
                     messages.append(f"Marked {task.content} complete.")
                 elif matches:
                     actions.append("ambiguous")
-                    messages.append(f"Multiple open tasks match {name}. Use /list in Discord to choose one.")
+                    choices = "; ".join(f'“{task.content[:120]}”' for task in matches[:3])
+                    if len(matches) > 3:
+                        choices += f"; and {len(matches) - 3} more"
+                    messages.append(f"Multiple open tasks match {name}: {choices}. "
+                                    "Please use the full task name, or use /list in Discord to choose one.")
                 else:
                     actions.append("not_found")
                     messages.append(f"I couldn't find an open task named {name}.")

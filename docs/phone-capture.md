@@ -115,13 +115,18 @@ Examples:
 - "do CS 373 homework" → classified and added to Notion.
 - "CS373 homework is done" → completes your matching open task.
 - "finished CS 373 homework" → completes it too.
+- "urban video interview is done" → can complete "Do urbn video interview".
 - "complete CS 373 homework" → adds a task; it is not a completion command.
 
 Completion matches your own open tasks, ignoring case and punctuation and allowing
 predictable variations such as `CS373` / `CS 373`, `hw` / `homework`, and an initial
-`do`. It does not guess a different assignment number. Ambiguous matches aren't
-completed; use `/list` in Discord to choose one. Unclear categories go to Inbox;
-use Discord's `/list` to move them.
+`do`. Small typos and reordered words also work when a match scores at least
+88/100 and leads the next candidate by at least 8 points. Numeric tokens must
+agree, so a different or omitted assignment number will not complete a task.
+Ambiguous matches aren't completed: the response names close candidates so you
+can repeat the completion with the full name, or use `/list` in Discord to choose
+one. A missing match returns "not found" and never becomes a new task. Unclear
+categories go to Inbox; use Discord's `/list` to move them.
 
 ## API contract
 
