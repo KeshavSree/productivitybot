@@ -99,9 +99,7 @@ def create_app(service: TaskService, config: CaptureConfig | None = None) -> web
             return error("Capture failed; retry using the same request_id", 500)
         status = service.sync_status(result.tasks)
         message = result.message
-        if status == "pending":
-            message += " Saved; waiting for Notion sync."
-        elif status == "local_only":
+        if status == "local_only":
             message += " Saved locally; Notion is not configured."
         return web.json_response({
             "request_id": request_id,

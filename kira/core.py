@@ -258,9 +258,7 @@ class TaskService:
                     if self.siri_channel_id:
                         message = result.message
                         status = self.sync_status(result.tasks)
-                        if status == "pending":
-                            message += " Saved; waiting for Notion sync."
-                        elif status == "local_only":
+                        if status == "local_only":
                             message += " Saved locally; Notion is not configured."
                         self.store.enqueue_siri(capture["id"], self.siri_channel_id, user_id, text, message)
                 if request_id:

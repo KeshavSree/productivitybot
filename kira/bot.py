@@ -343,8 +343,6 @@ class Kira(commands.Bot):
             summary = added_summary(result.added)
         elif result.action == "completed":
             summary = "\n".join(f"Marked **{short(t.content)}** complete." for t in result.tasks)
-        if self.service.sync_status(result.tasks) == "pending":
-            summary += "\nSaved; Notion sync is pending."
         kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}
         view = added_view(result.added)
         if view:

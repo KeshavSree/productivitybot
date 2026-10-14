@@ -73,6 +73,9 @@ installed or device-tested shortcut. Action labels can vary by system language.
 
 1. **Dictate Text**: select your language and stop after a pause (or on tap if you
    prefer). Store the result as `TaskText`. If it is empty, stop the shortcut.
+   If your existing Shortcut uses **Ask for Input**, change its prompt to
+   **What's up?**. This text is configured in the Shortcut on your iPhone, before
+   it contacts the server.
 2. Create a unique capture ID. A native-action recipe is **Current Date** →
    **Format Date** with custom format `yyyyMMddHHmmssSSS`, then **Random Number**
    between 100000 and 999999, and a **Text** action joining them with a hyphen.
@@ -93,8 +96,8 @@ installed or device-tested shortcut. Action labels can vary by system language.
    If the response contains `error`, show/read that error instead of saying it
    was saved.
 
-A successful capture means the changes are committed in SQLite. The usual first
-response says "Saved; waiting for Notion sync." The sync worker is notified
+A successful capture means the changes are committed in SQLite. Confirmations
+omit routine sync status; the JSON `sync_status` field still reports it. The sync worker is notified
 immediately and retries failed updates every 30 seconds. `local_only` means the
 Notion credentials haven't been configured; it doesn't mean a page was created.
 
@@ -177,7 +180,7 @@ Successful processing returns HTTP 200:
 {
   "request_id":"phone-20261006-unique",
   "action":"added",
-  "message":"Added Do cs 373 hw to CS 373. Saved; waiting for Notion sync.",
+  "message":"Added Do cs 373 hw to CS 373.",
   "sync_status":"pending",
   "replayed":false,
   "tasks":[{"id":1,"content":"Do cs 373 hw","category":"CS 373","done":false}]
