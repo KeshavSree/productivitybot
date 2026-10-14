@@ -1,10 +1,10 @@
-# Kira phone capture
+# Tara phone capture
 
-Rename the existing iPhone Shortcut to **Kira** to invoke it through Siri with
+Rename the existing iPhone Shortcut to **Tara** to invoke it through Siri with
 that name. Its URL, token, request body, and response actions stay the same.
 
 Phone exchanges are posted to Discord channel `1559954374007070790` using the
-format **Keshav:** (raw Siri text) followed by **Kira:** (the returned confirmation).
+format **Keshav:** (raw Siri text) followed by **Tara:** (the returned confirmation).
 Cancelled and pending captures are included. Discord posting uses a persistent
 outbox, so outages do not block capture and queued exchanges retry after restart.
 Request-ID retries do not enqueue another exchange. An unacknowledged Discord
@@ -13,8 +13,8 @@ send can still produce a duplicate on retry; delivery is at least once.
 Configure `SIRI_CHANNEL_ID` to override the target (`0` disables posting), and
 `SIRI_AUTHOR_NAME` to change the label. Grant the bot View Channel and Send Messages.
 
-The Python package and entry point are now `kira` / `python -m kira`.
-`python -m charles` remains a compatibility launcher for older Railway overrides.
+The Python package and entry point are now `tara` / `python -m tara`.
+`python -m charles` and `python -m kira` remain compatibility launchers for older Railway overrides.
 The existing `/data/charles.db` file and Notion `Charles ID` property are retained
 as storage identities to preserve tasks, speech memory, and page recovery.
 An existing `TRIGGER_WORD=c` setting automatically migrates to `k` at startup.
@@ -66,7 +66,7 @@ Setting only one variable or using an invalid credential/user ID fails startup
 with a clear configuration error. `/health` checks the process, not whether Notion
 is reachable. A Notion outage doesn't disable local capture.
 
-## 2. Build one Shortcut named Kira
+## 2. Build one Shortcut named Tara
 
 Use these actions in Apple's Shortcuts app. This is a setup recipe, not an
 installed or device-tested shortcut. Action labels can vary by system language.
@@ -107,7 +107,7 @@ For retries across separate Shortcut runs, extend the same Shortcut with a
 pending-request file:
 
 - Before **Get Contents of URL**, serialize the dictionary as JSON and **Save File**
-  to a fixed `Shortcuts/Kira/pending.json` location, with Ask Where to Save off.
+  to a fixed `Shortcuts/Tara/pending.json` location, with Ask Where to Save off.
   The file contains the text and request ID, not the bearer token.
 - At the start of the Shortcut, check that location (disable erroring on a missing
   file). If a pending request exists, offer to retry it and use its saved dictionary
@@ -127,13 +127,13 @@ iOS and the actions you've chosen. The pending-file extension needs file access.
 
 ## 3. Use either entrance
 
-- **Siri**: invoke Siri and say "Kira", wait for the speech-input prompt, then
-  say the task. The exact one-sentence phrase "Siri, Kira, [arbitrary text]"
+- **Siri**: invoke Siri and say "Tara", wait for the speech-input prompt, then
+  say the task. The exact one-sentence phrase "Siri, Tara, [arbitrary text]"
   isn't implemented by this Shortcut. If Dictate Text behaves differently through
   Siri on your device, test Ask for Input (Text) for the prompt; Lock Screen capture
   must still have a dictation step if you want it to start listening automatically.
 - **Lock Screen**: customize the Lock Screen, replace a bottom control with the
-  Shortcuts control, and choose Kira. Pressing it launches capture. It does not
+  Shortcuts control, and choose Tara. Pressing it launches capture. It does not
   record only while your finger remains held down.
 
 Examples:
@@ -200,7 +200,7 @@ Errors return JSON with `error`: 400 invalid input, 401 incorrect credential,
 and retry the original request ID and text.
 
 The sync queue persists additions, category changes, completions, and deletions.
-Kira adds a `Charles ID` rich-text property to the Notion database for recovery
+Tara adds a `Charles ID` rich-text property to the Notion database for recovery
 when a successful page creation response is lost. Run one service replica against
 this database; Notion doesn't provide an atomic unique constraint for that ID.
 

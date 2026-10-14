@@ -1,8 +1,8 @@
 import pytest
 
-from kira.categories import INBOX
-from kira.classifier import Classifier
-from kira.parser import parse
+from tara.categories import INBOX
+from tara.classifier import Classifier
+from tara.parser import parse
 
 
 @pytest.fixture(scope="module")

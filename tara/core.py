@@ -35,8 +35,8 @@ _CANCEL_PHRASES = (
 )
 _CANCEL_PHRASE = "(?:" + "|".join(re.escape(p) for p in _CANCEL_PHRASES) + ")"
 _CANCEL_UTTERANCE = re.compile(rf"{_CANCEL_PHRASE}(?: (?:and )?{_CANCEL_PHRASE})*")
-_CANCEL_PREFIX = re.compile(r"^(?:(?:hey )?(?:kira|charles)|actually|uh|um|oh|okay|ok|sorry|please) ")
-_CANCEL_SUFFIX = re.compile(r" (?:thanks|thank you|please|kira|charles)$")
+_CANCEL_PREFIX = re.compile(r"^(?:(?:hey )?(?:tara|kira|charles)|actually|uh|um|oh|okay|ok|sorry|please) ")
+_CANCEL_SUFFIX = re.compile(r" (?:thanks|thank you|please|tara|kira|charles)$")
 
 
 @dataclass

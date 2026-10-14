@@ -1,1 +1,1 @@
-worker: python -m kira
+worker: python -m tara

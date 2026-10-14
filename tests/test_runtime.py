@@ -6,7 +6,7 @@ import sqlite3
 import aiohttp
 import pytest
 
-import kira.__main__ as runtime
+import tara.__main__ as runtime
 
 
 class FakeBot:
@@ -40,7 +40,7 @@ class FakeBot:
 @pytest.fixture
 def runtime_env(monkeypatch, tmp_path):
     FakeBot.instances = []
-    monkeypatch.setattr(runtime, 'Kira', FakeBot)
+    monkeypatch.setattr(runtime, 'Tara', FakeBot)
     for name in ('NOTION_TOKEN', 'NOTION_DATABASE_ID', 'ALLOWED_USER_IDS', 'TASK_CHANNEL_ID', 'GUILD_ID'):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('DISCORD_TOKEN', 'fake-discord-token')

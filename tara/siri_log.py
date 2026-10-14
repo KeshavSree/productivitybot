@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 def transcript_parts(raw: str, response: str, event_id: str) -> list[str]:
     label = discord.utils.escape_markdown(os.getenv("SIRI_AUTHOR_NAME", "Keshav"))[:80]
     content = (f"**{label}:**\n{discord.utils.escape_markdown(raw)}\n\n"
-               f"**Kira:**\n{discord.utils.escape_markdown(response)}\n\n"
+               f"**Tara:**\n{discord.utils.escape_markdown(response)}\n\n"
                f"Capture: `{event_id}`")
     return [content[i:i + 1850] for i in range(0, len(content), 1850)]
 

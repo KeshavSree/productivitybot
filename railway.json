@@ -1,7 +1,7 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "startCommand": "python -m kira",
+    "startCommand": "python -m tara",
     "healthcheckPath": "/health",
     "restartPolicyType": "ALWAYS"
   }

@@ -5,9 +5,9 @@ import asyncio
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from kira.api import CaptureConfig, create_app
-from kira.core import TaskService
-from kira.store import Store
+from tara.api import CaptureConfig, create_app
+from tara.core import TaskService
+from tara.store import Store
 
 TOKEN = "test-phone-token-" + "x" * 32
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}

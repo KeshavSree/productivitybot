@@ -1,4 +1,4 @@
-from kira.parser import parse, split_tasks
+from tara.parser import parse, split_tasks
 
 
 def test_splits_lines_bullets_and_semicolons():

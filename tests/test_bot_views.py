@@ -1,8 +1,8 @@
 """Builds the Discord components offline to check they're valid (row/ID limits)."""
 
-from kira.bot import added_view, list_view, added_summary, control_command, completion_text
-from kira.core import TaskService
-from kira.store import Store
+from tara.bot import added_view, list_view, added_summary, control_command, completion_text
+from tara.core import TaskService
+from tara.store import Store
 
 
 async def test_views_build_and_respect_limits():
@@ -25,7 +25,7 @@ async def test_views_build_and_respect_limits():
 
 
 def test_trigger_word():
-    from kira.bot import task_text
+    from tara.bot import task_text
     bot = 999
     assert task_text("k do cs 373 hw", bot, "k") == "do cs 373 hw"
     assert task_text("K: apply to citadel", bot, "k") == "apply to citadel"
@@ -66,9 +66,9 @@ async def test_on_message_listen_flow():
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock
     import discord
-    from kira.bot import Kira
+    from tara.bot import Tara
 
-    bot = Kira(TaskService(Store(":memory:"), None), None, set(), None)
+    bot = Tara(TaskService(Store(":memory:"), None), None, set(), None)
     bot._connection.user = MagicMock(id=999)  # what bot.user reads
     channel = MagicMock(spec=discord.TextChannel, id=5)
 
