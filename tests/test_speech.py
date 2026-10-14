@@ -101,6 +101,27 @@ async def test_supported_model_edits_and_completion(svc):
     assert result.action == "completed" and svc.store.get(task.id).done
 
 
+async def test_chicago_completion_bypasses_unnecessary_model_review(svc):
+    task = svc.store.add_task(42, "pay everyone from the chicago trip", "Inbox")
+    other = svc.store.add_task(99, "pay everyone from the chicago trip", "Inbox")
+    model = Model({"decision": "pending", "category": "", "edits": [], "reason": "Uncertain"})
+    svc.correction.model = model
+    result = await svc.handle_text(42, "Pay everyone from the Chicago trip is done", "chicago", speech=True, sync=False)
+    assert result.action == "completed" and svc.store.get(task.id).done
+    assert not svc.store.get(other.id).done
+    assert model.calls == 0
+    replay = await svc.handle_text(42, "Pay everyone from the Chicago trip is done", "chicago", speech=True, sync=False)
+    assert replay.replayed and model.calls == 0
+
+
+async def test_ambiguous_completion_still_requires_selection(svc):
+    for _ in range(2):
+        svc.store.add_task(42, "pay everyone from the chicago trip", "Inbox")
+    result = await svc.handle_text(42, "Pay everyone from the Chicago trip is done", "two-trips", speech=True, sync=False)
+    assert result.action == "ambiguous"
+    assert len(svc.store.open_tasks(42)) == 2
+
+
 async def test_unsupported_edits_and_bad_schema(svc):
     svc.correction.model = Model(proposal(refs=["memory:999"]))
     result = await svc.handle_text(42, "urban interview", "unsupported", speech=True, sync=False)

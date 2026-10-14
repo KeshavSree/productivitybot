@@ -104,7 +104,7 @@ class CorrectionPipeline:
         return cls(store, classifier, model, os.getenv("CORRECTION_MODE", "active"))
 
     async def correct(self, user_id: int, raw: str) -> Decision:
-        from .core import cancellation_text
+        from .core import cancellation_text, completion_text, matching_tasks
         if self.mode == "off" or cancellation_text(raw):
             return Decision(raw, evidence={"version": VERSION, "mode": self.mode})
         if re.search(r"\b(?:not|never|isn't|isnt|wasn't|wasnt)\b.*\b(?:done|complete|completed|finished)\b", raw, re.I):
@@ -120,6 +120,15 @@ class CorrectionPipeline:
             return Decision(accepted if self.mode == "active" else raw,
                             "corrected" if accepted != "; ".join(pieces) else "unchanged",
                             evidence={"version": VERSION, "pieces": [d.evidence for d in decisions]})
+        # The transcript already expresses completion. An existing confident
+        # task match needs no rewriting and must not be vetoed by the LLM.
+        # The task handler checks the candidates again when committing changes.
+        name = completion_text(raw)
+        if name:
+            matches = matching_tasks(name, self.store.open_tasks(user_id))
+            if matches:
+                return Decision(raw, evidence={"version": VERSION, "method": "existing_completion_match",
+                                                "task_ids": [task.id for task in matches]})
         context = retrieve(self.store, user_id, raw, self.classifier)
         decision = self._known(raw, context)
         if decision is None:
