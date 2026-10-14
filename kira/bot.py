@@ -1,4 +1,4 @@
-"""Charles: the Discord side. Messages and slash commands in, buttons and menus out."""
+"""Kira: the Discord side. Messages and slash commands in, buttons and menus out."""
 
 import logging
 import os
@@ -61,12 +61,12 @@ def category_options(current: str | None = None) -> list[discord.SelectOption]:
     return [discord.SelectOption(label=n, value=n, emoji=emoji(n), default=(n == current)) for n in ALL_CATEGORIES]
 
 
-class CategorySelect(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:cat:(?P<task>\d+)"):
+class CategorySelect(discord.ui.DynamicItem[discord.ui.Select], template=r"(?:kira|charles):cat:(?P<task>\d+)"):
     """Pick a category for one task. Picking teaches the classifier."""
 
     def __init__(self, task_id: int, placeholder: str = "Move to…", current: str | None = None):
         super().__init__(discord.ui.Select(
-            custom_id=f"charles:cat:{task_id}", placeholder=placeholder,
+            custom_id=f"kira:cat:{task_id}", placeholder=placeholder,
             options=category_options(current)))
         self.task_id = task_id
 
@@ -86,7 +86,7 @@ class CategorySelect(discord.ui.DynamicItem[discord.ui.Select], template=r"charl
             ephemeral=True)
 
 
-class FixPicker(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:fix:(?P<ids>[\d,]+)"):
+class FixPicker(discord.ui.DynamicItem[discord.ui.Select], template=r"(?:kira|charles):fix:(?P<ids>[\d,]+)"):
     """Pick one of the listed tasks, then get a category menu for it."""
 
     def __init__(self, tasks: list[Task] | list[int], placeholder: str = "Wrong category? Pick a task to fix"):
@@ -94,7 +94,7 @@ class FixPicker(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:fi
         opts = [discord.SelectOption(label=short(t.content), value=str(t.id), emoji=emoji(t.category))
                 for t in tasks if isinstance(t, Task)] or [discord.SelectOption(label=str(i), value=str(i)) for i in ids]
         super().__init__(discord.ui.Select(
-            custom_id=f"charles:fix:{','.join(map(str, ids))}", placeholder=placeholder, options=opts))
+            custom_id=f"kira:fix:{','.join(map(str, ids))}", placeholder=placeholder, options=opts))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await _check(interaction)
@@ -112,7 +112,7 @@ class FixPicker(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:fi
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
-class DoneSelect(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:done:(?P<ids>[\d,]+)"):
+class DoneSelect(discord.ui.DynamicItem[discord.ui.Select], template=r"(?:kira|charles):done:(?P<ids>[\d,]+)"):
     """Tick off one or more tasks."""
 
     def __init__(self, tasks: list[Task] | list[int]):
@@ -120,7 +120,7 @@ class DoneSelect(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:d
         opts = [discord.SelectOption(label=short(t.content), value=str(t.id), emoji=emoji(t.category))
                 for t in tasks if isinstance(t, Task)] or [discord.SelectOption(label=str(i), value=str(i)) for i in ids]
         super().__init__(discord.ui.Select(
-            custom_id=f"charles:done:{','.join(map(str, ids))}", placeholder="✅ Mark done…",
+            custom_id=f"kira:done:{','.join(map(str, ids))}", placeholder="✅ Mark done…",
             min_values=1, max_values=len(opts), options=opts))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -143,11 +143,11 @@ class DoneSelect(discord.ui.DynamicItem[discord.ui.Select], template=r"charles:d
             view=list_view(remaining))
 
 
-class UndoButton(discord.ui.DynamicItem[discord.ui.Button], template=r"charles:undo:(?P<ids>[\d,]+)"):
+class UndoButton(discord.ui.DynamicItem[discord.ui.Button], template=r"(?:kira|charles):undo:(?P<ids>[\d,]+)"):
     def __init__(self, ids: list[int]):
         super().__init__(discord.ui.Button(
             label="Undo", style=discord.ButtonStyle.secondary, emoji="↩️",
-            custom_id=f"charles:undo:{','.join(map(str, ids))}"))
+            custom_id=f"kira:undo:{','.join(map(str, ids))}"))
         self.ids = ids
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -189,9 +189,9 @@ def list_view(tasks: list[Task]) -> discord.ui.View | None:
     if not tasks:
         return None
     view = discord.ui.View(timeout=None)
-    keep = set(_fits([t.id for t in tasks[:25]], "charles:done:"))
+    keep = set(_fits([t.id for t in tasks[:25]], "kira:done:"))
     view.add_item(DoneSelect([t for t in tasks if t.id in keep]))
-    keep = set(_fits([t.id for t in tasks[:25]], "charles:fix:"))
+    keep = set(_fits([t.id for t in tasks[:25]], "kira:fix:"))
     view.add_item(FixPicker([t for t in tasks if t.id in keep], "Move a task to another category"))
     return view
 
@@ -230,7 +230,7 @@ class AddModal(discord.ui.Modal, title="Add tasks"):
 # ---- the bot -------------------------------------------------------------------
 
 def control_command(content: str, trigger: str) -> str | None:
-    """"c listen" starts listening mode, "c end" stops it."""
+    """"k listen" starts listening mode, "k end" stops it."""
     if not trigger:
         return None
     m = re.fullmatch(rf"\s*{re.escape(trigger)}\s*[:,]?\s*(listen|end|stop)\s*", content, re.IGNORECASE)
@@ -241,10 +241,10 @@ def control_command(content: str, trigger: str) -> str | None:
 
 
 def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
-    """Return the task text if this message is meant for Charles, else None.
+    """Return the task text if this message is meant for Kira, else None.
 
-    A message is for Charles if it starts with the trigger word ("c do cs 373 hw",
-    "c: ...", "C, ..."), mentions the bot, or (with always=True) is in a DM or
+    A message is for Kira if it starts with the trigger word ("k do cs 373 hw",
+    "k: ...", "K, ..."), mentions the bot, or (with always=True) is in a DM or
     the tasks channel.
     """
     mention = re.compile(rf"<@!?{bot_id}>")
@@ -258,9 +258,9 @@ def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> 
     return None
 
 
-class Charles(commands.Bot):
+class Kira(commands.Bot):
     def __init__(self, svc: TaskService, task_channel_id: int | None, allowed: set[int], guild_id: int | None,
-                 trigger: str = "c"):
+                 trigger: str = "k"):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
@@ -269,7 +269,7 @@ class Charles(commands.Bot):
         self.allowed = allowed
         self.guild_id = guild_id
         self.trigger = trigger
-        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "c listen" mode
+        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "k listen" mode
         self.tree.interaction_check = self._allowed_interaction  # type: ignore[method-assign]
 
     def is_allowed(self, user: discord.abc.User) -> bool:
@@ -293,6 +293,18 @@ class Charles(commands.Bot):
 
     async def on_ready(self):
         log.info("Logged in as %s", self.user)
+        if self.user and self.user.name != "Kira":
+            try:
+                await self.user.edit(username="Kira")
+            except discord.HTTPException:
+                log.exception("Could not rename the Discord bot to Kira")
+        channel = self.get_channel(self.service.siri_channel_id)
+        guild = getattr(channel, "guild", None)
+        if guild and guild.me and guild.me.nick and guild.me.nick.casefold() == "charles":
+            try:
+                await guild.me.edit(nick="Kira")
+            except discord.HTTPException:
+                log.exception("Could not update the old server nickname")
 
     async def on_message(self, message: discord.Message):
         if message.author.bot or not self.is_allowed(message.author):

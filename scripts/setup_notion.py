@@ -13,7 +13,7 @@ import sys
 
 from dotenv import load_dotenv
 
-from charles.notion import Notion
+from kira.notion import Notion
 
 
 def page_id_from(url_or_id: str) -> str:

@@ -4,11 +4,11 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestServer
 
-import charles.notion as notion_mod
-from charles.categories import INBOX
-from charles.core import TaskService
-from charles.notion import Notion
-from charles.store import Store
+import kira.notion as notion_mod
+from kira.categories import INBOX
+from kira.core import TaskService
+from kira.notion import Notion
+from kira.store import Store
 
 
 class FakeNotion:
@@ -165,7 +165,7 @@ async def test_learning_survives_restart(tmp_path):
 
 async def test_api_to_notion_and_completion_retry(fake):
     from aiohttp.test_utils import TestClient
-    from charles.api import CaptureConfig, create_app
+    from kira.api import CaptureConfig, create_app
     n = Notion('secret')
     await n.create_board('parent-page')
     svc = TaskService(Store(':memory:'), n)

@@ -6,6 +6,7 @@ import re
 import json
 import weakref
 import time
+import os
 from dataclasses import asdict, dataclass, field
 
 from rapidfuzz import fuzz
@@ -34,8 +35,8 @@ _CANCEL_PHRASES = (
 )
 _CANCEL_PHRASE = "(?:" + "|".join(re.escape(p) for p in _CANCEL_PHRASES) + ")"
 _CANCEL_UTTERANCE = re.compile(rf"{_CANCEL_PHRASE}(?: (?:and )?{_CANCEL_PHRASE})*")
-_CANCEL_PREFIX = re.compile(r"^(?:(?:hey )?charles|actually|uh|um|oh|okay|ok|sorry|please) ")
-_CANCEL_SUFFIX = re.compile(r" (?:thanks|thank you|please|charles)$")
+_CANCEL_PREFIX = re.compile(r"^(?:(?:hey )?(?:kira|charles)|actually|uh|um|oh|okay|ok|sorry|please) ")
+_CANCEL_SUFFIX = re.compile(r" (?:thanks|thank you|please|kira|charles)$")
 
 
 @dataclass
@@ -153,6 +154,9 @@ class TaskService:
         self._sync_lock = asyncio.Lock()
         self._schema_ready = False
         self.sync_requested = asyncio.Event()
+        self.siri_requested = asyncio.Event()
+        from .siri_log import DEFAULT_CHANNEL_ID
+        self.siri_channel_id = int(os.getenv("SIRI_CHANNEL_ID", str(DEFAULT_CHANNEL_ID)))
         from .correction import CorrectionPipeline
         self.correction = CorrectionPipeline.from_env(store, self.classifier)
         self._capture_locks = weakref.WeakValueDictionary()
@@ -251,10 +255,20 @@ class TaskService:
                     result.correction_status = decision.status
                     self.store.finish_speech_capture(capture["id"], decision.text, decision.status,
                                                       decision.evidence, [t.id for t in result.tasks])
+                    if self.siri_channel_id:
+                        message = result.message
+                        status = self.sync_status(result.tasks)
+                        if status == "pending":
+                            message += " Saved; waiting for Notion sync."
+                        elif status == "local_only":
+                            message += " Saved locally; Notion is not configured."
+                        self.store.enqueue_siri(capture["id"], self.siri_channel_id, user_id, text, message)
                 if request_id:
                     self.store.save_capture_request(user_id, request_id, text, asdict(result))
         if result.tasks:
             self.sync_requested.set()
+        if capture and self.siri_channel_id:
+            self.siri_requested.set()
         if sync:
             for task in result.tasks:
                 await self._push(task)
@@ -405,8 +419,12 @@ class TaskService:
                 {"method": "human"}, [t.id for t in result.tasks])
             self.store.db.execute("UPDATE speech_captures SET resolution = ? WHERE id = ?",
                                   (json.dumps(asdict(result)), capture_id))
+            if self.siri_channel_id:
+                self.store.enqueue_siri(f"resolved:{capture_id}", self.siri_channel_id, user_id, intended, result.message)
         if result.tasks:
             self.sync_requested.set()
+        if self.siri_channel_id:
+            self.siri_requested.set()
         return result
 
     async def correct_task(self, user_id: int, task_id: int, intended: str) -> Task:

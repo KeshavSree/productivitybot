@@ -1,1 +1,1 @@
-worker: python -m charles
+worker: python -m kira

@@ -15,7 +15,7 @@ VERSION = "2022-06-28"
 TITLE_PROP = "Task"
 CATEGORY_PROP = "Category"
 DONE_PROP = "Done"
-SOURCE_PROP = "Charles ID"
+SOURCE_PROP = "Charles ID"  # Existing Notion recovery property; not a display name.
 
 
 class NotionError(RuntimeError):

@@ -6,7 +6,7 @@ import sqlite3
 import aiohttp
 import pytest
 
-import charles.__main__ as runtime
+import kira.__main__ as runtime
 
 
 class FakeBot:
@@ -27,6 +27,9 @@ class FakeBot:
     async def start(self, token):
         await self.stop.wait()
 
+    async def wait_until_ready(self):
+        await self.stop.wait()
+
     async def close(self):
         self.closed = True
 
@@ -37,7 +40,7 @@ class FakeBot:
 @pytest.fixture
 def runtime_env(monkeypatch, tmp_path):
     FakeBot.instances = []
-    monkeypatch.setattr(runtime, 'Charles', FakeBot)
+    monkeypatch.setattr(runtime, 'Kira', FakeBot)
     for name in ('NOTION_TOKEN', 'NOTION_DATABASE_ID', 'ALLOWED_USER_IDS', 'TASK_CHANNEL_ID', 'GUILD_ID'):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('DISCORD_TOKEN', 'fake-discord-token')

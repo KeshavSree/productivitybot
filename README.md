@@ -1,4 +1,9 @@
-# Charles
+# Kira
+
+Siri captures and replies are automatically posted as **Keshav:** / **Kira:**
+exchanges in Discord channel `1559954374007070790`. Delivery retries independently
+of task capture. Set `SIRI_CHANNEL_ID=0` to disable, or override it to change the channel.
+The bot needs View Channel and Send Messages there.
 
 A Discord bot that turns whatever you type into sorted tasks on a Notion board.
 
@@ -20,14 +25,14 @@ classifier that learns from your corrections.
    menu asking where it belongs. Your answer moves it in Notion and trains the model.
 
 You can also teach it permanent words with `/keyword` (e.g. `regression` → STAT 417).
-Categories, colors and rules live in `charles/categories.py`.
+Categories, colors and rules live in `kira/categories.py`.
 
 ## In Discord
 
 | What | How |
 | --- | --- |
-| Add tasks | Start a message with `c` in any channel (`c do cs 373 hw`), type in your tasks channel, DM Charles, or @mention it. Or `/add` (opens a box for several lines). |
-| Add a bunch | `c listen`, then every message you send in that channel is a task until `c end`. |
+| Add tasks | Start a message with `k` in any channel (`k do cs 373 hw`), type in your tasks channel, DM Kira, or @mention it. Or `/add` (opens a box for several lines). |
+| Add a bunch | `k listen`, then every message you send in that channel is a task until `k end`. |
 | Fix a category | `/list` → "Move a task to another category". Inbox tasks get a menu right in the reply. |
 | See / finish tasks | `/list` (optionally one category), then "Mark done". |
 | Mark a task done in chat | Say `write the report is done`, `write the report finished`, or `finished write the report`. Small typos and reordered words can match an open task; close candidates need clarification. |
@@ -35,7 +40,7 @@ Categories, colors and rules live in `charles/categories.py`.
 | See the rules | `/categories` |
 
 Completion searches only your own open tasks. Exact matches take precedence;
-otherwise Charles compares letter similarity and word order using
+otherwise Kira compares letter similarity and word order using
 [RapidFuzz](https://rapidfuzz.github.io/RapidFuzz/Usage/fuzz.html). A fuzzy match
 needs at least 88/100 similarity and an 8-point lead over the next candidate.
 For example, `urban video interview is done` can match `Do urbn video interview`.
@@ -84,7 +89,7 @@ Server ID* for `GUILD_ID`, and your own name → *Copy User ID* for `ALLOWED_USE
 
 ### 3. Run locally
 ```bash
-python -m charles
+python -m kira
 ```
 
 ## Keep it online 24/7 (Railway)
@@ -95,12 +100,12 @@ python -m charles
    optional ones from `.env.example`. Set `DATA_DIR=/data`.
 3. **Add a Volume** to the service, mount path `/data` (so learned keywords and
    corrections survive redeploys).
-4. Deploy. `railway.json` starts `python -m charles`, checks `/health`, and restarts
+4. Deploy. `railway.json` starts `python -m kira`, checks `/health`, and restarts
    it if it crashes. Discord works without a public domain; phone capture needs
    a public HTTPS domain pointing to the HTTP server's port.
 
 Alternatives: a free-tier Oracle Cloud VM or any always-on box with
-`python -m charles` under systemd; Fly.io also works with a volume.
+`python -m kira` under systemd; Fly.io also works with a volume.
 
 ## Phone capture: Siri and the Lock Screen
 
@@ -109,7 +114,7 @@ phonetic retrieval, category history, and optional Groq correction. See the
 [speech correction guide](docs/speech-correction.md) for configuration and the
 `/teach`, `/correct`, `/review`, `/captures`, and `/forget-memory` commands.
 
-Charles also runs an authenticated `POST /capture` endpoint alongside Discord.
+Kira also runs an authenticated `POST /capture` endpoint alongside Discord.
 Both entrances call the same Python task handler; the phone sends dictated text,
 and Discord calls the handler directly. Completion statements work through both.
 
@@ -120,11 +125,11 @@ tasks, capture request IDs, and the Notion sync queue. `GET /health` is the
 deployment healthcheck.
 
 See [the phone capture setup guide](docs/phone-capture.md) for the exact variables,
-API contract, and one Shortcut named Charles that can be launched through Siri
+API contract, and one Shortcut named Kira that can be launched through Siri
 or a Lock Screen control. The Shortcut requires setup and permissions on your
 iPhone; this repository does not install it remotely.
 
-Notion updates retry on local changes and every 30 seconds. Charles adds a
+Notion updates retry on local changes and every 30 seconds. Kira adds a
 `Charles ID` property to the board to recover pages after a lost creation response.
 Captures are saved locally before the API responds; its response distinguishes
 pending sync from a task already synced to Notion.

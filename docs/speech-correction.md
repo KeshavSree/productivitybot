@@ -1,6 +1,6 @@
 # Personal Siri correction
 
-Siri still dictates text and the Charles Shortcut still posts `text` and
+Siri still dictates text and the Kira Shortcut still posts `text` and
 `request_id` to `/capture`. Python performs personal correction before task
 matching and categorization. The spoken response remains the `message` field.
 
@@ -16,7 +16,7 @@ CORRECTION_MODEL=openai/gpt-oss-120b
 
 The Groq account's plan and model quotas apply. The model can be changed to
 another Groq model supporting strict structured output. No paid plan is required
-by Charles itself; check your account's available quota. Text and the retrieved
+by Kira itself; check your account's available quota. Text and the retrieved
 personal context are sent to Groq when the model is used.
 
 Without a Groq key, confirmed dictionary, contextual phrase, and full-transcript
@@ -116,7 +116,7 @@ human resolution, category patterns, and Notion title updates/retries.
 Provider responses in tests are mocked; those checks do not establish model
 accuracy. No real Siri corpus or live Groq request has been evaluated yet.
 Inspect `/captures`, correct wording, move categories, or disable overbroad
-rules as you use Charles. Real failures should become regression examples.
+rules as you use Kira. Real failures should become regression examples.
 Track damaging edits, missed corrections, unnecessary review, and latency
 separately. Replaying a learned example measures recall, not generalization.
 
@@ -128,6 +128,6 @@ separately. Replaying a learned example measures recall, not generalization.
   retrieve a bounded personal vocabulary shortlist, then edit localized spans.
 - [GEC-RAG](https://arxiv.org/abs/2501.10734): retrieve confirmed noisy/clean examples.
 - [DOC-RAG](https://aclanthology.org/2024.lrec-main.457.pdf): use domain-specific
-  language patterns. Charles adapts the idea; it does not implement that ASR model.
+  language patterns. Kira adapts the idea; it does not implement that ASR model.
 - [Selective classification](https://www.jmlr.org/papers/v11/el-yaniv10a.html):
   abstention trades automatic coverage for fewer damaging decisions.

@@ -1,8 +1,8 @@
 """Builds the Discord components offline to check they're valid (row/ID limits)."""
 
-from charles.bot import added_view, list_view, added_summary, control_command, completion_text
-from charles.core import TaskService
-from charles.store import Store
+from kira.bot import added_view, list_view, added_summary, control_command, completion_text
+from kira.core import TaskService
+from kira.store import Store
 
 
 async def test_views_build_and_respect_limits():
@@ -25,17 +25,17 @@ async def test_views_build_and_respect_limits():
 
 
 def test_trigger_word():
-    from charles.bot import task_text
+    from kira.bot import task_text
     bot = 999
-    assert task_text("c do cs 373 hw", bot, "c") == "do cs 373 hw"
-    assert task_text("C: apply to citadel", bot, "c") == "apply to citadel"
-    assert task_text("c, stack standup\ncs 211 lab", bot, "c") == "stack standup\ncs 211 lab"
-    assert task_text("<@999> grind leetcode", bot, "c") == "grind leetcode"
-    assert task_text("cool, see you later", bot, "c") is None
-    assert task_text("cs 373 hw", bot, "c") is None
-    assert task_text("c", bot, "c") is None
-    assert task_text("cs 373 hw", bot, "c", always=True) == "cs 373 hw"
-    assert task_text("c cs 373 hw", bot, "c", always=True) == "cs 373 hw"
+    assert task_text("k do cs 373 hw", bot, "k") == "do cs 373 hw"
+    assert task_text("K: apply to citadel", bot, "k") == "apply to citadel"
+    assert task_text("k, stack standup\ncs 211 lab", bot, "k") == "stack standup\ncs 211 lab"
+    assert task_text("<@999> grind leetcode", bot, "k") == "grind leetcode"
+    assert task_text("cool, see you later", bot, "k") is None
+    assert task_text("cs 373 hw", bot, "k") is None
+    assert task_text("k", bot, "k") is None
+    assert task_text("cs 373 hw", bot, "k", always=True) == "cs 373 hw"
+    assert task_text("k cs 373 hw", bot, "k", always=True) == "cs 373 hw"
 
 
 async def test_one_line_reply_and_no_menu_when_sorted():
@@ -46,12 +46,12 @@ async def test_one_line_reply_and_no_menu_when_sorted():
 
 
 def test_listen_mode_commands():
-    assert control_command("c listen", "c") == "listen"
-    assert control_command("C: Listen ", "c") == "listen"
-    assert control_command("c end", "c") == "end"
-    assert control_command("c stop", "c") == "end"
-    assert control_command("c end of semester review", "c") is None
-    assert control_command("multi", "c") is None
+    assert control_command("k listen", "k") == "listen"
+    assert control_command("K: Listen ", "k") == "listen"
+    assert control_command("k end", "k") == "end"
+    assert control_command("k stop", "k") == "end"
+    assert control_command("k end of semester review", "k") is None
+    assert control_command("multi", "k") is None
 
 
 def test_completion_phrases():
@@ -66,9 +66,9 @@ async def test_on_message_listen_flow():
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, MagicMock
     import discord
-    from charles.bot import Charles
+    from kira.bot import Kira
 
-    bot = Charles(TaskService(Store(":memory:"), None), None, set(), None)
+    bot = Kira(TaskService(Store(":memory:"), None), None, set(), None)
     bot._connection.user = MagicMock(id=999)  # what bot.user reads
     channel = MagicMock(spec=discord.TextChannel, id=5)
 
@@ -77,13 +77,13 @@ async def test_on_message_listen_flow():
                                add_reaction=AsyncMock(), reply=AsyncMock())
 
     m = msg("random chat"); await bot.on_message(m); m.reply.assert_not_called()
-    m = msg("c listen"); await bot.on_message(m); assert "Listening" in m.reply.call_args.args[0]
+    m = msg("k listen"); await bot.on_message(m); assert "Listening" in m.reply.call_args.args[0]
     m = msg("do stat 417 hw"); await bot.on_message(m)
     m.add_reaction.assert_called_with("👍")
     assert m.reply.call_args.args[0] == "Added **Do stat 417 hw** to 🟪 **STAT 417**"
-    m = msg("c end"); await bot.on_message(m); assert m.reply.call_args.args[0] == "Stopped listening."
+    m = msg("k end"); await bot.on_message(m); assert m.reply.call_args.args[0] == "Stopped listening."
     m = msg("do interview"); await bot.on_message(m); m.reply.assert_not_called()
-    m = msg("c do cs 373 hw"); await bot.on_message(m)
+    m = msg("k do cs 373 hw"); await bot.on_message(m)
     assert m.reply.call_args.args[0] == "Added **Do cs 373 hw** to 🟦 **CS 373**"
     m = msg("Do cs 373 hw is complete"); await bot.on_message(m)
     assert m.reply.call_args.args[0] == "Marked **Do cs 373 hw** complete."

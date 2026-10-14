@@ -76,6 +76,16 @@ CREATE TABLE IF NOT EXISTS speech_captures (
     UNIQUE(user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS speech_capture_user ON speech_captures(user_id, status);
+CREATE TABLE IF NOT EXISTS siri_outbox (
+    event_id TEXT PRIMARY KEY,
+    channel_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    raw TEXT NOT NULL,
+    response TEXT NOT NULL,
+    next_part INTEGER NOT NULL DEFAULT 0,
+    sent_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -285,3 +295,19 @@ class Store:
             self.db.execute("""INSERT INTO notion_title_sync VALUES (?, ?)
                 ON CONFLICT(task_id) DO UPDATE SET revision = excluded.revision""",
                 (task_id, self.pending_revision(task_id)))
+
+    def enqueue_siri(self, event_id: str, channel_id: int, user_id: int, raw: str, response: str) -> None:
+        self.db.execute("""INSERT OR IGNORE INTO siri_outbox
+            (event_id, channel_id, user_id, raw, response) VALUES (?, ?, ?, ?, ?)""",
+            (event_id, channel_id, user_id, raw, response))
+        self._commit()
+
+    def pending_siri(self) -> list[dict]:
+        return [dict(r) for r in self.db.execute("""SELECT * FROM siri_outbox
+            WHERE sent_at IS NULL ORDER BY created_at, rowid LIMIT 20""")]
+
+    def advance_siri(self, event_id: str, part: int, done: bool) -> None:
+        self.db.execute("""UPDATE siri_outbox SET next_part = ?,
+            sent_at = CASE WHEN ? THEN datetime('now') ELSE NULL END WHERE event_id = ?""",
+            (part, int(done), event_id))
+        self._commit()

@@ -5,9 +5,9 @@ import asyncio
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from charles.api import CaptureConfig, create_app
-from charles.core import TaskService
-from charles.store import Store
+from kira.api import CaptureConfig, create_app
+from kira.core import TaskService
+from kira.store import Store
 
 TOKEN = "test-phone-token-" + "x" * 32
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
@@ -47,6 +47,11 @@ async def test_concurrent_duplicate_capture_and_conflict(client):
     assert all(r.status == 200 for r in responses)
     assert sum(body['replayed'] for body in bodies) == 4
     assert len(service.store.open_tasks(42)) == 1
+    assert len(service.store.pending_siri()) == 1
+    exchange = service.store.pending_siri()[0]
+    assert exchange['raw'] == payload['text']
+    assert exchange['channel_id'] == 1559954374007070790
+    assert 'Added' in exchange['response']
     assert all(body['tasks'][0]['category'] == 'CS 373' for body in bodies)
     assert bodies[0]['sync_status'] == 'local_only'
     assert not service.store.open_tasks(99)

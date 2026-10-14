@@ -5,10 +5,10 @@ import json
 
 import pytest
 
-from charles.core import CaptureConflict, TaskService
-from charles.correction import CorrectionPipeline, protected
-from charles.retrieval import retrieve, sound, similarity
-from charles.store import Store
+from kira.core import CaptureConflict, TaskService
+from kira.correction import CorrectionPipeline, protected
+from kira.retrieval import retrieve, sound, similarity
+from kira.store import Store
 
 
 class Model:
@@ -198,8 +198,8 @@ async def test_negated_completion_and_model_disabled(svc):
 
 
 async def test_groq_request_is_structured_and_bounded(monkeypatch):
-    from charles.correction import GroqCorrector
-    import charles.correction as module
+    from kira.correction import GroqCorrector
+    import kira.correction as module
     seen = {}
 
     class Response:
