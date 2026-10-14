@@ -130,3 +130,8 @@ class Notion:
 
     async def archive(self, page_id: str) -> None:
         await self._req("PATCH", f"/pages/{page_id}", {"archived": True})
+
+    async def set_content(self, page_id: str, content: str) -> None:
+        await self._req("PATCH", f"/pages/{page_id}", {"properties": {
+            TITLE_PROP: {"title": [{"text": {"content": content[:2000]}}]},
+        }})

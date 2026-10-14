@@ -1,5 +1,9 @@
 # Charles phone capture
 
+Personal transcript correction is configured on Railway; the existing Shortcut
+actions and `text` / `request_id` body stay the same. See
+[personal Siri correction](speech-correction.md) for setup and learning commands.
+
 The same Python handler accepts Discord messages and phone captures. The phone
 sends text, not audio; Siri/Shortcuts handles dictation. No native iOS app is needed.
 
@@ -117,6 +121,13 @@ Examples:
 - "finished CS 373 homework" → completes it too.
 - "urban video interview is done" → can complete "Do urbn video interview".
 - "complete CS 373 homework" → adds a task; it is not a completion command.
+- "nothing", "never mind", "no", "bye", "goodbye", or "cancel that" → cancels
+  capture without adding or completing tasks. The confirmation is "Cancelled."
+
+Cancellation matches the whole utterance, allowing punctuation, polite wording,
+and combinations such as "No, never mind, thanks". It does not discard a longer
+task such as "say goodbye to the team". In a list of tasks, standalone cancellation
+lines are ignored and the actual task lines are processed normally.
 
 Completion matches your own open tasks, ignoring case and punctuation and allowing
 predictable variations such as `CS373` / `CS 373`, `hw` / `homework`, and an initial
@@ -154,7 +165,9 @@ Successful processing returns HTTP 200:
 }
 ```
 
-`action` is `added`, `completed`, `mixed`, `ambiguous`, `not_found`, or `empty`.
+`action` is `added`, `completed`, `mixed`, `ambiguous`, `not_found`, `cancelled`, or `empty`.
+Cancelled captures return `message: "Cancelled."`, an empty `tasks` list, and
+`sync_status: "not_applicable"`. Their request IDs still support safe retries.
 `sync_status` is `pending`, `synced`, `local_only`, or `not_applicable`.
 Repeating a request returns its original outcome with `replayed: true` and its
 current sync status. It doesn't add or complete a second task.

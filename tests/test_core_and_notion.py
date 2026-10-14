@@ -87,6 +87,31 @@ def cat(page):
     return page["properties"]["Category"]["select"]["name"]
 
 
+async def test_corrected_title_updates_same_page_and_retries(fake):
+    n = Notion("secret")
+    await n.create_board("parent-page")
+    svc = TaskService(Store(":memory:"), n)
+    try:
+        added = await svc.add_from_text(42, "urban inner view")
+        task = added[0].task
+        page_id = task.notion_page_id
+        fake.fail_patch = True
+        await svc.correct_task(42, task.id, "URBN video interview")
+        assert svc.store.pending_revision(task.id) is not None
+        fake.fail_patch = False
+        await svc.sync_pending()
+        assert len(fake.pages) == 1
+        assert fake.pages[page_id]["properties"]["Task"]["title"][0]["text"]["content"] == "URBN video interview"
+        assert svc.store.pending_revision(task.id) is None
+        # A normal category update must not overwrite a title edited directly in Notion.
+        fake.pages[page_id]["properties"]["Task"]["title"][0]["text"]["content"] = "Notion edit"
+        await svc.move(task.id, "Stack")
+        assert fake.pages[page_id]["properties"]["Task"]["title"][0]["text"]["content"] == "Notion edit"
+    finally:
+        await n.close()
+        svc.store.close()
+
+
 async def test_board_setup_and_full_flow(fake):
     n = Notion("secret")
     db_id = await n.create_board("parent-page")

@@ -44,6 +44,13 @@ an assignment number requires clarification by supplying it. Close matches retur
 candidate names; weak matches return "not found". Neither creates a new task.
 `complete X` still adds a task; `X is complete` completes one.
 
+To dismiss voice capture, say `nothing`, `never mind`, `no`, `bye`, `goodbye`,
+`cancel that`, or `scratch that`. Whole cancellation phrases accept punctuation,
+polite wording, and combinations such as `No, never mind, thanks`. They create
+no tasks and make no Notion changes. The phone gets a short `Cancelled.` response;
+Discord stays silent. Longer task titles such as `say goodbye to the team` still
+work normally.
+
 ## Setup
 
 ### 1. Discord bot
@@ -96,6 +103,11 @@ Alternatives: a free-tier Oracle Cloud VM or any always-on box with
 `python -m charles` under systemd; Fly.io also works with a volume.
 
 ## Phone capture: Siri and the Lock Screen
+
+Personal Siri post-processing supports learned vocabulary, contextual phrases,
+phonetic retrieval, category history, and optional Groq correction. See the
+[speech correction guide](docs/speech-correction.md) for configuration and the
+`/teach`, `/correct`, `/review`, `/captures`, and `/forget-memory` commands.
 
 Charles also runs an authenticated `POST /capture` endpoint alongside Discord.
 Both entrances call the same Python task handler; the phone sends dictated text,

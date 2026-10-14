@@ -39,7 +39,7 @@ def grouped_embed(title: str, tasks: list[Task], footer: str | None = None) -> d
         by_cat.setdefault(t.category, []).append(t)
     for cat in ALL_CATEGORIES:
         if cat in by_cat:
-            lines = "\n".join(f"• {short(t.content, 200)}" for t in by_cat[cat])
+            lines = "\n".join(f"• #{t.id} {short(t.content, 180)}" for t in by_cat[cat])
             embed.add_field(name=f"{emoji(cat)} {cat}", value=lines[:1024], inline=False)
     if not tasks:
         embed.description = "Nothing here."
@@ -322,7 +322,7 @@ class Charles(commands.Bot):
         if not text:
             return
         result = await self.service.handle_text(message.author.id, text)
-        if result.action == "empty":
+        if result.action in {"empty", "cancelled"}:
             return
         if result.tasks:
             await message.add_reaction("✅" if result.action == "completed" else "👍")
@@ -341,6 +341,74 @@ class Charles(commands.Bot):
 
 
 def register_commands(tree: app_commands.CommandTree):
+    @tree.command(name="teach", description="Teach a recurring Siri mishearing; optionally limit its context")
+    @app_commands.choices(category=CATEGORY_CHOICES)
+    async def teach(interaction: discord.Interaction, original: str, intended: str,
+                    category: app_commands.Choice[str] | None = None, context: str = ""):
+        try:
+            memory_id = service(interaction).store.teach_speech(
+                interaction.user.id, original, intended, category.value if category else None,
+                context, "pattern" if context else "vocabulary")
+        except ValueError as exc:
+            return await interaction.response.send_message(str(exc), ephemeral=True)
+        await interaction.response.send_message(
+            f"Learned correction #{memory_id}: {short(original)} → {short(intended)}. "
+            "Use /forget-memory to disable it.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @tree.command(name="correct", description="Correct an existing task title and teach the speech correction")
+    async def correct(interaction: discord.Interaction, task_id: int, intended: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            task = await service(interaction).correct_task(interaction.user.id, task_id, intended)
+        except ValueError as exc:
+            return await interaction.followup.send(str(exc), ephemeral=True)
+        await interaction.followup.send(f"Corrected #{task.id}: {short(task.content, 300)}. "
+                                       "Saved the wording example for future captures.", ephemeral=True,
+                                       allowed_mentions=discord.AllowedMentions.none())
+
+    @tree.command(name="review", description="List uncertain phone captures or resolve one with intended wording")
+    async def review(interaction: discord.Interaction, capture_id: str | None = None,
+                     intended: str | None = None):
+        svc = service(interaction)
+        if capture_id is None and intended is None:
+            rows = svc.store.speech_pending(interaction.user.id)
+            message = "\n".join(f"`{r['id']}`\n{short(r['raw'], 160)}" for r in rows[:8])
+            return await interaction.response.send_message(message or "No pending captures.", ephemeral=True,
+                                                          allowed_mentions=discord.AllowedMentions.none())
+        if not capture_id or not intended:
+            return await interaction.response.send_message("Supply both capture_id and intended wording.", ephemeral=True)
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            result = await svc.resolve_capture(interaction.user.id, capture_id, intended)
+        except ValueError as exc:
+            return await interaction.followup.send(str(exc), ephemeral=True)
+        await interaction.followup.send(result.message[:1900], ephemeral=True,
+                                       allowed_mentions=discord.AllowedMentions.none())
+
+    @tree.command(name="speech-memory", description="Show your active vocabulary and confirmed speech examples")
+    async def speech_memory(interaction: discord.Interaction):
+        rows = service(interaction).store.speech_memories(interaction.user.id)
+        message = "\n".join(f"#{r['id']} [{r['kind']}, {r['category'] or 'global'}] "
+                            f"{short(r['original'], 40)} → {short(r['intended'], 40)}"
+                            for r in rows[:15])
+        await interaction.response.send_message(message or "No speech memories yet.", ephemeral=True,
+                                                 allowed_mentions=discord.AllowedMentions.none())
+
+    @tree.command(name="forget-memory", description="Disable one of your learned speech rules or examples")
+    async def forget_memory(interaction: discord.Interaction, memory_id: int):
+        changed = service(interaction).store.disable_speech_memory(interaction.user.id, memory_id)
+        await interaction.response.send_message("Memory disabled." if changed else "Active memory not found.", ephemeral=True)
+
+    @tree.command(name="captures", description="Inspect your recent raw and corrected phone captures")
+    async def captures(interaction: discord.Interaction):
+        rows = service(interaction).store.db.execute("""SELECT * FROM speech_captures
+            WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 5""", (interaction.user.id,)).fetchall()
+        message = "\n\n".join(f"`{r['id']}` [{r['status']}]\n"
+                              f"Heard: {short(r['raw'], 100)}\nUsed: {short(r['accepted'] or '', 100)}\n"
+                              f"Task IDs: {r['task_ids']}" for r in rows)
+        await interaction.response.send_message(message[:1900] or "No phone captures yet.", ephemeral=True,
+                                                 allowed_mentions=discord.AllowedMentions.none())
+
     @tree.command(name="add", description="Add tasks; I'll sort them into categories")
     @app_commands.describe(text="Optional. Leave empty to open a box for several lines.")
     async def add(interaction: discord.Interaction, text: str | None = None):

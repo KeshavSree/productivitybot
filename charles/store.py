@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS notion_deletions (
     source_id TEXT PRIMARY KEY,
     page_id TEXT
 );
+CREATE TABLE IF NOT EXISTS notion_title_sync (
+    task_id INTEGER PRIMARY KEY,
+    revision INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS capture_requests (
     user_id INTEGER NOT NULL,
     request_id TEXT NOT NULL,
@@ -46,6 +50,32 @@ CREATE TABLE IF NOT EXISTS metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS speech_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    original TEXT NOT NULL,
+    intended TEXT NOT NULL,
+    category TEXT,
+    context TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS speech_memory_user ON speech_memory(user_id, active);
+CREATE TABLE IF NOT EXISTS speech_captures (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    request_id TEXT,
+    raw TEXT NOT NULL,
+    accepted TEXT,
+    status TEXT NOT NULL DEFAULT 'processing',
+    evidence TEXT NOT NULL DEFAULT '{}',
+    task_ids TEXT NOT NULL DEFAULT '[]',
+    resolution TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS speech_capture_user ON speech_captures(user_id, status);
 """
 
 
@@ -159,6 +189,7 @@ class Store:
                 self.db.execute("INSERT OR IGNORE INTO notion_deletions VALUES (?, ?)",
                                 (self.source_id(task_id), task.notion_page_id))
             self.db.execute("DELETE FROM notion_sync WHERE task_id = ?", (task_id,))
+            self.db.execute("DELETE FROM notion_title_sync WHERE task_id = ?", (task_id,))
             self.db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
     def open_tasks(self, user_id: int, category: str | None = None) -> list[Task]:
@@ -185,3 +216,72 @@ class Store:
 
     def corrections(self) -> list[tuple[str, str]]:
         return [(r["text"], r["category"]) for r in self.db.execute("SELECT text, category FROM corrections")]
+
+    def teach_speech(self, user_id: int, original: str, intended: str,
+                     category: str | None = None, context: str = "", kind: str = "vocabulary") -> int:
+        if kind not in {"vocabulary", "example", "pattern", "category"}:
+            raise ValueError("Unknown memory kind")
+        if not original.strip() or not intended.strip() or max(len(original), len(intended), len(context)) > 4000:
+            raise ValueError("Memory text must contain 1–4000 characters")
+        existing = self.db.execute("""SELECT id FROM speech_memory WHERE user_id = ? AND kind = ?
+            AND original = ? AND intended = ? AND category IS ? AND context = ? AND active = 1""",
+            (user_id, kind, original.strip(), intended.strip(), category, context.strip())).fetchone()
+        if existing:
+            return existing[0]
+        cur = self.db.execute("""INSERT INTO speech_memory
+            (user_id, kind, original, intended, category, context) VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, kind, original.strip(), intended.strip(), category, context.strip()))
+        self._commit()
+        return cur.lastrowid
+
+    def speech_memories(self, user_id: int) -> list[dict]:
+        return [dict(r) for r in self.db.execute(
+            "SELECT * FROM speech_memory WHERE user_id = ? AND active = 1 ORDER BY id DESC", (user_id,))]
+
+    def disable_speech_memory(self, user_id: int, memory_id: int) -> bool:
+        cur = self.db.execute("UPDATE speech_memory SET active = 0 WHERE id = ? AND user_id = ? AND active = 1",
+                              (memory_id, user_id))
+        self._commit()
+        return bool(cur.rowcount)
+
+    def begin_speech_capture(self, user_id: int, request_id: str | None, raw: str) -> dict:
+        existing = self.db.execute("SELECT * FROM speech_captures WHERE user_id = ? AND request_id = ?",
+                                   (user_id, request_id)).fetchone() if request_id else None
+        if existing:
+            if existing["raw"] != raw:
+                raise ValueError("request_id was already used for different text")
+            return dict(existing)
+        capture_id = uuid.uuid4().hex
+        self.db.execute("INSERT INTO speech_captures (id, user_id, request_id, raw) VALUES (?, ?, ?, ?)",
+                        (capture_id, user_id, request_id, raw))
+        self._commit()
+        return self.speech_capture(user_id, capture_id)
+
+    def speech_capture(self, user_id: int, capture_id: str) -> dict | None:
+        row = self.db.execute("SELECT * FROM speech_captures WHERE id = ? AND user_id = ?",
+                              (capture_id, user_id)).fetchone()
+        return dict(row) if row else None
+
+    def finish_speech_capture(self, capture_id: str, accepted: str, status: str, evidence: dict,
+                              task_ids: list[int]) -> None:
+        self.db.execute("UPDATE speech_captures SET accepted = ?, status = ?, evidence = ?, task_ids = ? WHERE id = ?",
+                        (accepted, status, json.dumps(evidence), json.dumps(task_ids), capture_id))
+        self._commit()
+
+    def speech_pending(self, user_id: int) -> list[dict]:
+        return [dict(r) for r in self.db.execute("""SELECT * FROM speech_captures
+            WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 20""", (user_id,))]
+
+    def speech_history(self, user_id: int, limit: int = 500) -> list[dict]:
+        return [dict(r) for r in self.db.execute("""SELECT id, content, category, done FROM
+            (SELECT *, ROW_NUMBER() OVER (PARTITION BY category ORDER BY id DESC) AS position
+             FROM tasks WHERE user_id = ?) WHERE position <= 60 ORDER BY position, id DESC LIMIT ?""",
+            (user_id, limit))]
+
+    def set_content(self, task_id: int, content: str) -> None:
+        with self.transaction():
+            self.db.execute("UPDATE tasks SET content = ? WHERE id = ?", (content, task_id))
+            self.mark_pending(task_id)
+            self.db.execute("""INSERT INTO notion_title_sync VALUES (?, ?)
+                ON CONFLICT(task_id) DO UPDATE SET revision = excluded.revision""",
+                (task_id, self.pending_revision(task_id)))

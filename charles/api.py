@@ -91,7 +91,7 @@ def create_app(service: TaskService, config: CaptureConfig | None = None) -> web
         if len(split_tasks(text)) > MAX_TASKS:
             return error(f"Submit at most {MAX_TASKS} tasks per capture", 400)
         try:
-            result = await service.handle_text(config.user_id, text, request_id, sync=False)
+            result = await service.handle_text(config.user_id, text, request_id, sync=False, speech=True)
         except CaptureConflict as exc:
             return error(str(exc), 409)
         except Exception:
@@ -109,6 +109,10 @@ def create_app(service: TaskService, config: CaptureConfig | None = None) -> web
             "message": message,
             "sync_status": status,
             "replayed": result.replayed,
+            "capture_id": result.capture_id,
+            "raw_text": result.raw_text,
+            "corrected_text": result.corrected_text,
+            "correction_status": result.correction_status,
             "tasks": [{"id": t.id, "content": t.content, "category": t.category, "done": t.done}
                       for t in result.tasks],
         }, headers={"Cache-Control": "no-store"})
