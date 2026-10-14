@@ -68,11 +68,33 @@ class CaptureConflict(ValueError):
     """A capture ID was reused with different input."""
 
 
+_COMPLETED_ACTIONS = {
+    "booked": "book", "reserved": "reserve", "paid": "pay",
+    "sent": "send", "submitted": "submit", "bought": "buy",
+    "purchased": "purchase", "ordered": "order", "scheduled": "schedule",
+    "renewed": "renew", "emailed": "email", "called": "call",
+    "uploaded": "upload", "filed": "file", "signed": "sign",
+    "registered": "register", "reviewed": "review", "written": "write",
+    "cleaned": "clean", "fixed": "fix",
+}
+_PAST_ACTION = "(?:" + "|".join(_COMPLETED_ACTIONS) + ")"
+_NEGATION = re.compile(
+    r"\b(?:not|never|isn't|isnt|wasn't|wasnt|aren't|arent|weren't|werent|"
+    r"haven't|havent|hasn't|hasnt|didn't|didnt|don't|dont|can't|cant|cannot|won't|wont)\b", re.I)
+
+
+def negated_completion(content: str) -> bool:
+    text = content.replace("’", "'")
+    return bool(_NEGATION.search(text) and re.search(
+        rf"\b(?:done|finished|complete|completed|{_PAST_ACTION})\b", text, re.I))
+
+
 def completion_text(content: str) -> str | None:
     """Recognize completion statements, preserving 'complete X' as a new task."""
-    text = content.strip().rstrip(".!? ")
-    if re.search(r"\b(?:not|never|isn't|isnt|wasn't|wasnt)\b", text, re.I):
+    text = content.replace("’", "'").strip().rstrip(".!? ")
+    if _NEGATION.search(text):
         return None
+    text = re.sub(r"\s+(?:now|already|finally|just\s+now)$", "", text, flags=re.I)
     patterns = (
         r"^(?P<task>.+?)\s+(?:(?:is|was|has\s+been)\s+)?(?:done|finished|complete|completed)$",
         r"^(?:I\s+(?:have\s+)?)?(?:finished|completed)\s+(?P<task>.+)$",
@@ -83,6 +105,18 @@ def completion_text(content: str) -> str | None:
         if match:
             task = match.group("task").strip(" \t.,!?\"'“”‘’")
             return task or None
+    passive = re.fullmatch(
+        rf"(?P<task>.+?)(?:\s+(?:is|was|are|were|(?:has|have)\s+"
+        rf"(?:(?:already|finally|just)\s+)?been)\s+|'s\s+)"
+        rf"(?:(?:already|finally|just)\s+)?(?P<verb>{_PAST_ACTION})", text, re.I)
+    active = re.fullmatch(
+        rf"(?:(?:I|we)(?:'ve|\s+have)?\s+)?(?:(?:already|finally|just)\s+)?"
+        rf"(?P<verb>{_PAST_ACTION})\s+(?P<task>.+)", text, re.I)
+    match = passive or active
+    if match:
+        subject = re.sub(r"^(?:my|our|the|a|an)\s+", "", match.group("task").strip(), flags=re.I)
+        verb = _COMPLETED_ACTIONS[match.group("verb").lower()]
+        return f"{verb} {subject}" if subject else None
     return None
 
 
@@ -107,6 +141,11 @@ def _spoken_name(text: str) -> str:
     words = normalize_task_name(text).split()
     if words and words[0] in {"do", "finish", "complete"}:
         words.pop(0)
+    # Article/first-person variation in the object of a supported action:
+    # 'Book a flight', 'Book my flight', and 'Book flight' can refer to one task.
+    if words and words[0] in _COMPLETED_ACTIONS.values() and len(words) > 1:
+        if words[1] in {"my", "our", "the", "a", "an"}:
+            words.pop(1)
     return " ".join({"hw": "homework", "hws": "homework"}.get(w, w) for w in words)
 
 
@@ -178,6 +217,10 @@ class TaskService:
         added, completed, actions, messages = [], [], [], []
         for piece in pieces:
             if cancellation_text(piece):
+                continue
+            if negated_completion(piece):
+                actions.append("no_change")
+                messages.append("That describes an unfinished task. Nothing was marked complete.")
                 continue
             name = completion_text(piece)
             if name:

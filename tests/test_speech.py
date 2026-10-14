@@ -255,3 +255,46 @@ def test_category_patterns_are_confirmed_and_isolated(svc):
     context = retrieve(svc.store, 42, "weekly update", svc.classifier)
     assert any("weekly update" in p["recurring_phrases"] for p in context["category_patterns"])
     assert "secret" not in json.dumps(context)
+
+
+@pytest.mark.parametrize("statement", [
+    "My flight is booked now", "My flight's booked", "I've booked my flight",
+    "I booked my flight", "booked the flight", "My flight has already been booked",
+])
+async def test_booked_flight_completes_existing_task(svc, statement):
+    task = svc.store.add_task(42, "Book flight", "Inbox")
+    svc.correction.model = Model(failure=RuntimeError("Model must not be needed"))
+    result = await svc.handle_text(42, statement, "flight", speech=True, sync=False)
+    assert result.action == "completed"
+    assert svc.store.get(task.id).done
+    assert result.tasks[0].id == task.id
+    assert svc.correction.model.calls == 0
+    assert len(svc.store.speech_history(42)) == 1
+
+
+@pytest.mark.parametrize("statement", [
+    "My flight isn't booked", "My flight is not booked yet", "I haven't booked my flight",
+    "I need to book my flight", "I will book my flight", "Book flight",
+])
+async def test_unfinished_or_future_flight_is_not_completed(svc, statement):
+    task = svc.store.add_task(42, "Book flight", "Inbox")
+    await svc.handle_text(42, statement, "unfinished", speech=True, sync=False)
+    assert not svc.store.get(task.id).done
+
+
+async def test_completed_action_with_no_match_is_not_added(svc):
+    result = await svc.handle_text(42, "My flight is booked now", "missing", speech=True, sync=False)
+    assert result.action == "not_found"
+    assert not svc.store.open_tasks(42)
+
+
+async def test_completed_action_preserves_number_and_ambiguity(svc):
+    one = svc.store.add_task(42, "Book flight 1", "Inbox")
+    two = svc.store.add_task(42, "Book flight 2", "Inbox")
+    result = await svc.handle_text(42, "My flight 2 is booked now", "number", speech=True, sync=False)
+    assert result.action == "completed" and svc.store.get(two.id).done
+    assert not svc.store.get(one.id).done
+    svc.store.add_task(42, "Book flight 1", "Inbox")
+    result = await svc.handle_text(42, "My flight 1 is booked now", "ambiguous", speech=True, sync=False)
+    assert result.action == "ambiguous"
+    assert not svc.store.get(one.id).done

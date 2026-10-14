@@ -104,10 +104,10 @@ class CorrectionPipeline:
         return cls(store, classifier, model, os.getenv("CORRECTION_MODE", "active"))
 
     async def correct(self, user_id: int, raw: str) -> Decision:
-        from .core import cancellation_text, completion_text, matching_tasks
+        from .core import cancellation_text, completion_text, matching_tasks, negated_completion
         if self.mode == "off" or cancellation_text(raw):
             return Decision(raw, evidence={"version": VERSION, "mode": self.mode})
-        if re.search(r"\b(?:not|never|isn't|isnt|wasn't|wasnt)\b.*\b(?:done|complete|completed|finished)\b", raw, re.I):
+        if negated_completion(raw):
             decision = Decision(raw, "pending", evidence={"reason": "Negated completion statement", "version": VERSION})
             return Decision(raw, "shadow", evidence={"proposed_status": "pending"}) if self.mode == "shadow" else decision
         # Each task piece has independent context; do not let a model create separators.
