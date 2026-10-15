@@ -309,31 +309,40 @@ class Tara(commands.Bot):
     async def on_message(self, message: discord.Message):
         if message.author.bot or not self.is_allowed(message.author):
             return
-        correction = re.fullmatch(r"\s*correction\s*:\s*(.*?)\s*", message.content, re.I | re.S)
-        if correction:
-            kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}
-            reference = message.reference
-            if not reference or not reference.message_id or reference.channel_id != message.channel.id:
-                await message.reply("Reply to the Siri log message with `correction: corrected text`.", **kwargs)
-                return
+        feedback = re.fullmatch(
+            r"\s*(correction|clarification|category)(?:\s+#(\d+))?\s*:\s*(.*?)\s*",
+            message.content, re.I | re.S)
+        reference = getattr(message, "reference", None)
+        kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}
+        if reference and reference.message_id and reference.channel_id == message.channel.id:
             try:
                 original = reference.resolved
                 if not isinstance(original, discord.Message):
                     original = await message.channel.fetch_message(reference.message_id)
                 capture = re.search(r"Capture: `(?:resolved:)?([0-9a-f]{32})`", original.content)
-                if not self.user or original.author.id != self.user.id or not capture:
-                    raise ValueError("Reply to one of my Siri log messages containing a capture ID.")
-                intended = correction.group(1).strip()
-                if len(intended) >= 2 and (intended[0], intended[-1]) in {
-                    ('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’")
-                }:
-                    intended = intended[1:-1].strip()
-                response = await self.service.correct_capture(message.author.id, capture.group(1), intended)
+                if self.user and original.author.id == self.user.id and capture:
+                    kind = feedback.group(1).lower() if feedback else (
+                        "details" if message.content.strip().casefold() == "details" else "reply")
+                    text = feedback.group(3).strip() if feedback else message.content.strip()
+                    task_id = int(feedback.group(2)) if feedback and feedback.group(2) else None
+                    if len(text) >= 2 and (text[0], text[-1]) in {
+                        ('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’")
+                    }:
+                        text = text[1:-1].strip()
+                    response = await self.service.capture_feedback(
+                        message.author.id, capture.group(1), kind, text, task_id)
+                    # Keep the capture link on follow-ups so replies can continue the conversation.
+                    await message.reply(response[:1800] + f"\n\nCapture: `{capture.group(1)}`", **kwargs)
+                    return
             except ValueError as exc:
-                response = str(exc)
+                suffix = f"\n\nCapture: `{capture.group(1)}`" if capture else ""
+                await message.reply(str(exc)[:1800] + suffix, **kwargs)
+                return
             except discord.HTTPException:
-                response = "I couldn't read the original message. Please try replying again."
-            await message.reply(response[:2000], **kwargs)
+                await message.reply("I couldn't read or reply to the original message. Please try again.", **kwargs)
+                return
+        if feedback:
+            await message.reply("Reply to my Siri log message with that feedback so I know which capture you mean.", **kwargs)
             return
         key = (message.author.id, message.channel.id)
         cmd = control_command(message.content, self.trigger)
@@ -390,36 +399,6 @@ def register_commands(tree: app_commands.CommandTree):
         await interaction.response.send_message(
             f"Learned correction #{memory_id}: {short(original)} → {short(intended)}. "
             "Use /forget-memory to disable it.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
-
-    @tree.command(name="correct", description="Correct an existing task title and teach the speech correction")
-    async def correct(interaction: discord.Interaction, task_id: int, intended: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            task = await service(interaction).correct_task(interaction.user.id, task_id, intended)
-        except ValueError as exc:
-            return await interaction.followup.send(str(exc), ephemeral=True)
-        await interaction.followup.send(f"Corrected #{task.id}: {short(task.content, 300)}. "
-                                       "Saved the wording example for future captures.", ephemeral=True,
-                                       allowed_mentions=discord.AllowedMentions.none())
-
-    @tree.command(name="review", description="List uncertain phone captures or resolve one with intended wording")
-    async def review(interaction: discord.Interaction, capture_id: str | None = None,
-                     intended: str | None = None):
-        svc = service(interaction)
-        if capture_id is None and intended is None:
-            rows = svc.store.speech_pending(interaction.user.id)
-            message = "\n".join(f"`{r['id']}`\n{short(r['raw'], 160)}" for r in rows[:8])
-            return await interaction.response.send_message(message or "No pending captures.", ephemeral=True,
-                                                          allowed_mentions=discord.AllowedMentions.none())
-        if not capture_id or not intended:
-            return await interaction.response.send_message("Supply both capture_id and intended wording.", ephemeral=True)
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        try:
-            result = await svc.resolve_capture(interaction.user.id, capture_id, intended)
-        except ValueError as exc:
-            return await interaction.followup.send(str(exc), ephemeral=True)
-        await interaction.followup.send(result.message[:1900], ephemeral=True,
-                                       allowed_mentions=discord.AllowedMentions.none())
 
     @tree.command(name="speech-memory", description="Show your active vocabulary and confirmed speech examples")
     async def speech_memory(interaction: discord.Interaction):

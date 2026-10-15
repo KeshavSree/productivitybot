@@ -35,13 +35,19 @@ correction, but Discord manages teaching and review.
 
 - Reply to Tara's Siri log message with `correction: your corrected task title`.
   For a capture that added one task, this updates that task and its existing
-  Notion page and teaches the wording example, just like `/correct`. For a pending
-  capture, it executes your supplied wording as a human review. Only the capture's
-  owner can correct it; captures affecting multiple tasks need a specific task ID.
+  Notion page and teaches the wording example. Only the capture's owner can
+  change it. `/correct` and `/review` have been replaced by replies.
+- If Tara asks for clarification on a pending capture, reply with what you meant,
+  or use `clarification: intended text`. Your wording executes once without an
+  LLM call. Subsequent corrections rename the resulting task.
+- Reply with `category: CS 211` to move the task and remember its category.
+- Reply with `details` to see the raw input, accepted wording, status, and task IDs.
+- For captures that added multiple tasks, use `correction #123: corrected title`
+  or `category #123: CS 211`, choosing an ID shown by `details`.
+- Tara's feedback replies keep the capture reference, so you can reply to those
+  messages too. An unrecognized reply to a processed capture shows usage help
+  rather than becoming a new task.
 - `/list` displays task IDs.
-- `/correct task_id:123 intended:Do URBN video interview` changes that existing
-  task's title, queues a title update for its existing Notion page, and stores a
-  confirmed example. It does not change completion state or create another task.
 - `/teach original:urban intended:URBN context:video interview` teaches a phrase
   replacement only when the literal contextual phrase is present. Leave context
   empty only for genuinely universal replacements.
@@ -50,8 +56,6 @@ correction, but Discord manages teaching and review.
   it as evidence; a category guess alone is insufficient for direct replacement.
 - `/captures` displays the five most recent raw/accepted captures, statuses,
   full capture IDs, and affected task IDs.
-- `/review` lists pending captures. `/review capture_id:<id> intended:<what you meant>`
-  resolves one and executes it once. Repeating the resolution returns its receipt.
 - `/speech-memory` lists the latest fifteen active personal memories and IDs.
 - `/forget-memory memory_id:123` disables a rule or example. It preserves the
   historical record; it does not delete tasks or change Notion.

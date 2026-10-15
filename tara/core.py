@@ -287,7 +287,7 @@ class TaskService:
                 result = TextResult.from_receipt(receipt[1])
             else:
                 if decision and decision.status == "pending":
-                    result = TextResult("pending", "I couldn't safely interpret that. Saved for clarification in Discord.")
+                    result = TextResult("pending", "I couldn't safely interpret that. Reply to my Discord message with what you meant.")
                 else:
                     result = self._handle_local(user_id, decision.text if decision else text,
                                                 decision.category if decision else None)
@@ -450,7 +450,7 @@ class TaskService:
             if capture["resolution"]:
                 return TextResult.from_receipt(json.loads(capture["resolution"]))
             if capture["status"] != "pending":
-                raise ValueError("Only pending captures can be resolved; use /correct for an existing task")
+                raise ValueError("Only pending captures can be resolved; reply with correction: to edit an existing task")
             result = self._handle_local(user_id, intended)
             result.capture_id, result.raw_text = capture_id, capture["raw"]
             result.corrected_text, result.correction_status = intended, "confirmed"
@@ -468,7 +468,8 @@ class TaskService:
             self.siri_requested.set()
         return result
 
-    async def correct_capture(self, user_id: int, capture_id: str, intended: str) -> str:
+    async def correct_capture(self, user_id: int, capture_id: str, intended: str,
+                              task_id: int | None = None) -> str:
         """Apply reply feedback only to a capture owned by the replying user."""
         capture = self.store.speech_capture(user_id, capture_id)
         if not capture:
@@ -478,10 +479,44 @@ class TaskService:
         receipt = self.store.capture_request(user_id, capture["request_id"]) if capture["request_id"] else None
         outcome = json.loads(capture["resolution"]) if capture["resolution"] else (receipt[1] if receipt else None)
         task_ids = json.loads(capture["task_ids"])
-        if not outcome or outcome.get("action") != "added" or len(task_ids) != 1:
-            raise ValueError("Reply correction needs a capture that added one task. Use /correct for a specific task.")
-        task = await self.correct_task(user_id, task_ids[0], intended)
+        if not outcome or outcome.get("action") != "added":
+            raise ValueError("This capture didn't add a task; its completion action cannot be changed by renaming a task.")
+        if task_id is None and len(task_ids) == 1:
+            task_id = task_ids[0]
+        if task_id is None or task_id not in task_ids:
+            raise ValueError(f"Choose a task from this capture: {task_ids}. Reply with correction #123: corrected title.")
+        task = await self.correct_task(user_id, task_id, intended)
         return f"Corrected #{task.id}: {task.content}. Saved the wording example for future captures."
+
+    async def capture_feedback(self, user_id: int, capture_id: str, kind: str,
+                               text: str = "", task_id: int | None = None) -> str:
+        capture = self.store.speech_capture(user_id, capture_id)
+        if not capture:
+            raise ValueError("Capture not found for your account.")
+        if kind == "details":
+            tasks = [self.store.get(i) for i in json.loads(capture["task_ids"])]
+            titles = "\n".join(f"#{t.id}: {t.content} ({t.category})" for t in tasks if t and t.user_id == user_id)
+            return (f"Heard: {capture['raw']}\nUsed: {capture['accepted'] or ''}\n"
+                    f"Status: {capture['status']}\n{titles}")[:1800]
+        if kind in {"correction", "clarification"}:
+            return await self.correct_capture(user_id, capture_id, text, task_id)
+        if kind == "category":
+            from .categories import CATEGORIES, INBOX
+            category = next((name for name in [INBOX] + [c.name for c in CATEGORIES]
+                             if name.casefold() == text.strip().casefold()), None)
+            if not category:
+                raise ValueError("Unknown category. Use /categories to see the available names.")
+            ids = json.loads(capture["task_ids"])
+            if task_id is None and len(ids) == 1:
+                task_id = ids[0]
+            task = self.store.get(task_id) if task_id in ids else None
+            if not task or task.user_id != user_id:
+                raise ValueError(f"Choose a task from this capture: {ids}. Reply with category #123: category name.")
+            await self.move(task.id, category)
+            return f"Moved {task.content} to {category}. Remembered the category example."
+        if capture["status"] == "pending":
+            return (await self.resolve_capture(user_id, capture_id, text)).message
+        return "Reply with correction: corrected title, category: category name, or details."
 
     async def correct_task(self, user_id: int, task_id: int, intended: str) -> Task:
         intended = intended.strip()

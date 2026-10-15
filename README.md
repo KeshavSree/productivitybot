@@ -112,7 +112,8 @@ Alternatives: a free-tier Oracle Cloud VM or any always-on box with
 Personal Siri post-processing supports learned vocabulary, contextual phrases,
 phonetic retrieval, category history, and optional Groq correction. See the
 [speech correction guide](docs/speech-correction.md) for configuration and the
-`/teach`, `/correct`, `/review`, `/captures`, and `/forget-memory` commands.
+reply-based corrections, clarifications, category feedback, and capture details.
+Standalone `/teach`, `/captures`, and `/forget-memory` commands manage rules and history.
 
 Tara also runs an authenticated `POST /capture` endpoint alongside Discord.
 Both entrances call the same Python task handler; the phone sends dictated text,
