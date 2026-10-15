@@ -90,6 +90,12 @@ CREATE TABLE IF NOT EXISTS siri_outbox (
     sent_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS siri_messages (
+    channel_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    capture_id TEXT NOT NULL,
+    PRIMARY KEY (channel_id, message_id)
+);
 """
 
 
@@ -324,6 +330,16 @@ class Store:
     def pending_siri(self) -> list[dict]:
         return [dict(r) for r in self.db.execute("""SELECT * FROM siri_outbox
             WHERE sent_at IS NULL ORDER BY created_at, rowid LIMIT 20""")]
+
+    def link_siri_message(self, channel_id: int, message_id: int, capture_id: str) -> None:
+        self.db.execute("INSERT OR REPLACE INTO siri_messages VALUES (?, ?, ?)",
+                        (channel_id, message_id, capture_id.removeprefix("resolved:")))
+        self._commit()
+
+    def message_capture(self, channel_id: int, message_id: int) -> str | None:
+        row = self.db.execute("SELECT capture_id FROM siri_messages WHERE channel_id = ? AND message_id = ?",
+                              (channel_id, message_id)).fetchone()
+        return row[0] if row else None
 
     def advance_siri(self, event_id: str, part: int, done: bool) -> None:
         self.db.execute("""UPDATE siri_outbox SET next_part = ?,

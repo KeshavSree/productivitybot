@@ -47,7 +47,7 @@ correction, but Discord manages teaching and review.
 - Reply with `details` to see the raw input, accepted wording, status, and task IDs.
 - For captures that added multiple tasks, use `correction #123: corrected title`
   or `category #123: CS 211`, choosing an ID shown by `details`.
-- Tara's feedback replies keep the capture reference, so you can reply to those
+- Tara's feedback replies keep an internal capture reference, so you can reply to those
   messages too. An unrecognized reply to a processed capture shows usage help
   rather than becoming a new task.
 - `/list` displays task IDs.
@@ -58,7 +58,7 @@ correction, but Discord manages teaching and review.
   Stack tag unless a contextual condition is also supplied. The LLM can consider
   it as evidence; a category guess alone is insufficient for direct replacement.
 - `/captures` displays the five most recent raw/accepted captures, statuses,
-  full capture IDs, and affected task IDs.
+  and affected task IDs. Capture IDs are kept internally rather than printed.
 - `/speech-memory` lists the latest fifteen active personal memories and IDs.
 - `/forget-memory memory_id:123` disables a rule or example. It preserves the
   historical record; it does not delete tasks or change Notion.

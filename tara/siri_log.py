@@ -13,8 +13,7 @@ log = logging.getLogger(__name__)
 def transcript_parts(raw: str, response: str, event_id: str) -> list[str]:
     label = discord.utils.escape_markdown(os.getenv("SIRI_AUTHOR_NAME", "Keshav"))[:80]
     content = (f"**{label}:**\n{discord.utils.escape_markdown(raw)}\n\n"
-               f"**Tara:**\n{discord.utils.escape_markdown(response)}\n\n"
-               f"Capture: `{event_id}`")
+               f"**Tara:**\n{discord.utils.escape_markdown(response)}")
     return [content[i:i + 1850] for i in range(0, len(content), 1850)]
 
 
@@ -25,8 +24,12 @@ async def deliver_pending(bot, store) -> int:
             channel = bot.get_channel(row["channel_id"]) or await bot.fetch_channel(row["channel_id"])
             parts = transcript_parts(row["raw"], row["response"], row["event_id"])
             for index in range(row["next_part"], len(parts)):
-                await channel.send(parts[index], allowed_mentions=discord.AllowedMentions.none(), suppress_embeds=True)
-                store.advance_siri(row["event_id"], index + 1, index + 1 == len(parts))
+                sent = await channel.send(parts[index], allowed_mentions=discord.AllowedMentions.none(), suppress_embeds=True)
+                with store.transaction():
+                    store.link_siri_message(row["channel_id"], sent.id, row["event_id"])
+                    store.advance_siri(row["event_id"], index + 1, index + 1 == len(parts))
+            # A pending transcript may have been split using the older visible-ID format.
+            store.advance_siri(row["event_id"], len(parts), True)
             delivered += 1
         except Exception:
             # A failed fetch/send leaves the outbox intact; capture never waits here.

@@ -321,12 +321,18 @@ class Tara(commands.Bot):
         reference = getattr(message, "reference", None)
         kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}
         if reference and reference.message_id and reference.channel_id == message.channel.id:
+            capture_id = None
             try:
                 original = reference.resolved
                 if not isinstance(original, discord.Message):
                     original = await message.channel.fetch_message(reference.message_id)
-                capture = re.search(r"Capture: `(?:resolved:)?([0-9a-f]{32})`", original.content)
-                if self.user and original.author.id == self.user.id and capture:
+                if self.user and original.author.id == self.user.id:
+                    capture_id = self.service.store.message_capture(message.channel.id, original.id)
+                    if not capture_id:
+                        # Preserve replies to older messages that still display their ID.
+                        legacy = re.search(r"Capture: `(?:resolved:)?([0-9a-f]{32})`", original.content)
+                        capture_id = legacy.group(1) if legacy else None
+                if capture_id:
                     kind = feedback.group(1).lower() if feedback else (
                         "details" if message.content.strip().casefold() == "details" else "reply")
                     text = feedback.group(3).strip() if feedback else message.content.strip()
@@ -336,13 +342,14 @@ class Tara(commands.Bot):
                     }:
                         text = text[1:-1].strip()
                     response = await self.service.capture_feedback(
-                        message.author.id, capture.group(1), kind, text, task_id)
-                    # Keep the capture link on follow-ups so replies can continue the conversation.
-                    await message.reply(response[:1800] + f"\n\nCapture: `{capture.group(1)}`", **kwargs)
+                        message.author.id, capture_id, kind, text, task_id)
+                    sent = await message.reply(response[:1800], **kwargs)
+                    self.service.store.link_siri_message(message.channel.id, sent.id, capture_id)
                     return
             except ValueError as exc:
-                suffix = f"\n\nCapture: `{capture.group(1)}`" if capture else ""
-                await message.reply(str(exc)[:1800] + suffix, **kwargs)
+                sent = await message.reply(str(exc)[:1800], **kwargs)
+                if capture_id:
+                    self.service.store.link_siri_message(message.channel.id, sent.id, capture_id)
                 return
             except discord.HTTPException:
                 await message.reply("I couldn't read or reply to the original message. Please try again.", **kwargs)
@@ -424,7 +431,7 @@ def register_commands(tree: app_commands.CommandTree):
     async def captures(interaction: discord.Interaction):
         rows = service(interaction).store.db.execute("""SELECT * FROM speech_captures
             WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 5""", (interaction.user.id,)).fetchall()
-        message = "\n\n".join(f"`{r['id']}` [{r['status']}]\n"
+        message = "\n\n".join(f"[{r['status']}]\n"
                               f"Heard: {short(r['raw'], 100)}\nUsed: {short(r['accepted'] or '', 100)}\n"
                               f"Task IDs: {r['task_ids']}" for r in rows)
         await interaction.response.send_message(message[:1900] or "No phone captures yet.", ephemeral=True,
