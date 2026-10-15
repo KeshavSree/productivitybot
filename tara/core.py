@@ -468,6 +468,21 @@ class TaskService:
             self.siri_requested.set()
         return result
 
+    async def correct_capture(self, user_id: int, capture_id: str, intended: str) -> str:
+        """Apply reply feedback only to a capture owned by the replying user."""
+        capture = self.store.speech_capture(user_id, capture_id)
+        if not capture:
+            raise ValueError("Capture not found for your account.")
+        if capture["status"] == "pending":
+            return (await self.resolve_capture(user_id, capture_id, intended)).message
+        receipt = self.store.capture_request(user_id, capture["request_id"]) if capture["request_id"] else None
+        outcome = json.loads(capture["resolution"]) if capture["resolution"] else (receipt[1] if receipt else None)
+        task_ids = json.loads(capture["task_ids"])
+        if not outcome or outcome.get("action") != "added" or len(task_ids) != 1:
+            raise ValueError("Reply correction needs a capture that added one task. Use /correct for a specific task.")
+        task = await self.correct_task(user_id, task_ids[0], intended)
+        return f"Corrected #{task.id}: {task.content}. Saved the wording example for future captures."
+
     async def correct_task(self, user_id: int, task_id: int, intended: str) -> Task:
         intended = intended.strip()
         task = self.store.get(task_id)

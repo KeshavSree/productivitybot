@@ -33,6 +33,11 @@ correction, but Discord manages teaching and review.
 
 ## Learn while using it
 
+- Reply to Tara's Siri log message with `correction: your corrected task title`.
+  For a capture that added one task, this updates that task and its existing
+  Notion page and teaches the wording example, just like `/correct`. For a pending
+  capture, it executes your supplied wording as a human review. Only the capture's
+  owner can correct it; captures affecting multiple tasks need a specific task ID.
 - `/list` displays task IDs.
 - `/correct task_id:123 intended:Do URBN video interview` changes that existing
   task's title, queues a title update for its existing Notion page, and stores a

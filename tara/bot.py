@@ -309,6 +309,32 @@ class Tara(commands.Bot):
     async def on_message(self, message: discord.Message):
         if message.author.bot or not self.is_allowed(message.author):
             return
+        correction = re.fullmatch(r"\s*correction\s*:\s*(.*?)\s*", message.content, re.I | re.S)
+        if correction:
+            kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}
+            reference = message.reference
+            if not reference or not reference.message_id or reference.channel_id != message.channel.id:
+                await message.reply("Reply to the Siri log message with `correction: corrected text`.", **kwargs)
+                return
+            try:
+                original = reference.resolved
+                if not isinstance(original, discord.Message):
+                    original = await message.channel.fetch_message(reference.message_id)
+                capture = re.search(r"Capture: `(?:resolved:)?([0-9a-f]{32})`", original.content)
+                if not self.user or original.author.id != self.user.id or not capture:
+                    raise ValueError("Reply to one of my Siri log messages containing a capture ID.")
+                intended = correction.group(1).strip()
+                if len(intended) >= 2 and (intended[0], intended[-1]) in {
+                    ('"', '"'), ("'", "'"), ("“", "”"), ("‘", "’")
+                }:
+                    intended = intended[1:-1].strip()
+                response = await self.service.correct_capture(message.author.id, capture.group(1), intended)
+            except ValueError as exc:
+                response = str(exc)
+            except discord.HTTPException:
+                response = "I couldn't read the original message. Please try replying again."
+            await message.reply(response[:2000], **kwargs)
+            return
         key = (message.author.id, message.channel.id)
         cmd = control_command(message.content, self.trigger)
         if cmd == "listen":
