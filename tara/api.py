@@ -111,7 +111,8 @@ def create_app(service: TaskService, config: CaptureConfig | None = None) -> web
             "raw_text": result.raw_text,
             "corrected_text": result.corrected_text,
             "correction_status": result.correction_status,
-            "tasks": [{"id": t.id, "content": t.content, "category": t.category, "done": t.done}
+            "tasks": [{"id": t.id, "content": t.content, "category": t.category, "done": t.done,
+                       "due_date": t.due_date}
                       for t in result.tasks],
         }, headers={"Cache-Control": "no-store"})
 

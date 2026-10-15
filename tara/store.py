@@ -39,6 +39,10 @@ CREATE TABLE IF NOT EXISTS notion_title_sync (
     task_id INTEGER PRIMARY KEY,
     revision INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notion_date_sync (
+    task_id INTEGER PRIMARY KEY,
+    revision INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS capture_requests (
     user_id INTEGER NOT NULL,
     request_id TEXT NOT NULL,
@@ -97,6 +101,7 @@ class Task:
     category: str
     done: bool
     notion_page_id: str | None
+    due_date: str | None = None
 
 
 class Store:
@@ -106,6 +111,8 @@ class Store:
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        if "due_date" not in {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}:
+            self.db.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
         self._in_transaction = False
         with self.transaction():
             self.db.execute("INSERT OR IGNORE INTO metadata VALUES ('instance_id', ?)", (str(uuid.uuid4()),))
@@ -163,15 +170,18 @@ class Store:
 
     def _task(self, row) -> Task:
         return Task(row["id"], row["user_id"], row["content"], row["category"],
-                    bool(row["done"]), row["notion_page_id"])
+                    bool(row["done"]), row["notion_page_id"], row["due_date"])
 
-    def add_task(self, user_id: int, content: str, category: str) -> Task:
+    def add_task(self, user_id: int, content: str, category: str, due_date: str | None = None) -> Task:
         with self.transaction():
             cur = self.db.execute(
-                "INSERT INTO tasks (user_id, content, category) VALUES (?, ?, ?)",
-                (user_id, content, category),
+                "INSERT INTO tasks (user_id, content, category, due_date) VALUES (?, ?, ?, ?)",
+                (user_id, content, category, due_date),
             )
             self.mark_pending(cur.lastrowid)
+            if due_date:
+                self.db.execute("INSERT INTO notion_date_sync VALUES (?, ?)",
+                                (cur.lastrowid, self.pending_revision(cur.lastrowid)))
         return self.get(cur.lastrowid)
 
     def get(self, task_id: int) -> Task | None:
@@ -192,6 +202,14 @@ class Store:
             self.db.execute("UPDATE tasks SET done = ? WHERE id = ?", (int(done), task_id))
             self.mark_pending(task_id)
 
+    def set_date(self, task_id: int, due_date: str | None) -> None:
+        with self.transaction():
+            self.db.execute("UPDATE tasks SET due_date = ? WHERE id = ?", (due_date, task_id))
+            self.mark_pending(task_id)
+            self.db.execute("INSERT INTO notion_date_sync VALUES (?, ?) ON CONFLICT(task_id) "
+                            "DO UPDATE SET revision = excluded.revision",
+                            (task_id, self.pending_revision(task_id)))
+
     def delete(self, task_id: int) -> None:
         with self.transaction():
             task = self.get(task_id)
@@ -200,6 +218,7 @@ class Store:
                                 (self.source_id(task_id), task.notion_page_id))
             self.db.execute("DELETE FROM notion_sync WHERE task_id = ?", (task_id,))
             self.db.execute("DELETE FROM notion_title_sync WHERE task_id = ?", (task_id,))
+            self.db.execute("DELETE FROM notion_date_sync WHERE task_id = ?", (task_id,))
             self.db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
     def open_tasks(self, user_id: int, category: str | None = None) -> list[Task]:

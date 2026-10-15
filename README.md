@@ -109,6 +109,18 @@ Alternatives: a free-tier Oracle Cloud VM or any always-on box with
 
 ## Phone capture: Siri and the Lock Screen
 
+Task dates are recognized from wording such as "Go to the event on October 20",
+"submit homework tomorrow", "on Friday", "next Monday", "in 3 days", or an
+ISO date (`2026-10-20`). The task keeps its original wording and stores a separate
+`due_date`; Notion sync automatically creates and fills a **Date** property.
+Relative dates use `TASK_TIMEZONE` (default `America/Indiana/Indianapolis`).
+Month/day dates without a year use their next occurrence; numeric dates use US
+month/day order (`10/20/2026`). "Next Friday" means the next Friday strictly after
+today. Invalid, conflicting, or unsupported date ranges stay unset. This version
+captures calendar dates, not times or reminders. Existing tasks are not backfilled.
+Reply to a Siri log message with `date: October 20` to set a date, `date: none` to
+clear it, or `date #123: October 20` to choose one task from a multi-task capture.
+
 Personal Siri post-processing supports learned vocabulary, contextual phrases,
 phonetic retrieval, category history, and optional Groq correction. See the
 [speech correction guide](docs/speech-correction.md) for configuration and the

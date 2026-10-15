@@ -41,6 +41,9 @@ correction, but Discord manages teaching and review.
   or use `clarification: intended text`. Your wording executes once without an
   LLM call. Subsequent corrections rename the resulting task.
 - Reply with `category: CS 211` to move the task and remember its category.
+- Reply with `date: October 20` to set the task's date, or `date: none` to clear it.
+  Dates captured from task wording are stored separately and synced to Notion's
+  Date property. Relative dates use your configured `TASK_TIMEZONE`.
 - Reply with `details` to see the raw input, accepted wording, status, and task IDs.
 - For captures that added multiple tasks, use `correction #123: corrected title`
   or `category #123: CS 211`, choosing an ID shown by `details`.

@@ -34,7 +34,8 @@ def protected(text: str) -> tuple:
     actions = tuple("cancel" if cancellation_text(p) else "complete" if completion_text(p) else "add"
                     for p in pieces)
     categories = tuple(p.explicit_category.name if p.explicit_category else None for p in parse(text))
-    return re.findall(r"\d+", text), negatives, actions, categories
+    from .dates import date_mentions
+    return re.findall(r"\d+", text), negatives, actions, categories, date_mentions(text)
 
 
 def valid_change(raw: str, corrected: str) -> bool:

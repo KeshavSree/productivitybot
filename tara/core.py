@@ -14,6 +14,7 @@ from rapidfuzz import fuzz
 from .classifier import Classifier, Result
 from .notion import Notion
 from .parser import parse, split_tasks
+from .dates import date_mentions, extract_date
 from .store import Store, Task
 
 log = logging.getLogger(__name__)
@@ -206,7 +207,7 @@ class TaskService:
             result = self.classifier.classify(parsed.content, parsed.explicit_category)
             if category and not parsed.explicit_category:
                 result = Result(category, 0.0, "context", "Personal correction evidence; score is not a probability")
-            task = self.store.add_task(user_id, parsed.content, result.category)
+            task = self.store.add_task(user_id, parsed.content, result.category, extract_date(parsed.content))
             added.append(Added(task, result))
         return added
 
@@ -246,6 +247,10 @@ class TaskService:
                     added.append(item)
                     actions.append("added")
                     messages.append(f"Added {item.task.content} to {item.task.category}.")
+                    if item.task.due_date:
+                        messages[-1] += f" Date: {item.task.due_date}."
+                    elif date_mentions(item.task.content):
+                        messages[-1] += " I couldn't choose one valid date; reply in Discord with date: and the date."
         action = actions[0] if actions and len(set(actions)) == 1 else "mixed" if actions else "empty"
         return TextResult(action, "\n".join(messages) or "I couldn't find any tasks in that.",
                           [a.task for a in added] + completed, added)
@@ -355,6 +360,13 @@ class TaskService:
                 self.store.set_notion_page(task.id, page)
                 task.notion_page_id = page
             await self.notion.update_task(task.notion_page_id, task.category, task.done)
+            date_revision = self.store.db.execute("SELECT revision FROM notion_date_sync WHERE task_id = ?",
+                                                 (task_id,)).fetchone()
+            if date_revision and date_revision[0] <= revision:
+                await self.notion.set_date(task.notion_page_id, task.due_date)
+                self.store.db.execute("DELETE FROM notion_date_sync WHERE task_id = ? AND revision = ?",
+                                      (task_id, date_revision[0]))
+                self.store._commit()
             title_revision = self.store.db.execute("SELECT revision FROM notion_title_sync WHERE task_id = ?",
                                                     (task_id,)).fetchone()
             if title_revision and title_revision[0] <= revision:
@@ -495,28 +507,37 @@ class TaskService:
             raise ValueError("Capture not found for your account.")
         if kind == "details":
             tasks = [self.store.get(i) for i in json.loads(capture["task_ids"])]
-            titles = "\n".join(f"#{t.id}: {t.content} ({t.category})" for t in tasks if t and t.user_id == user_id)
+            titles = "\n".join(f"#{t.id}: {t.content} ({t.category}), date: {t.due_date or 'unset'}"
+                               for t in tasks if t and t.user_id == user_id)
             return (f"Heard: {capture['raw']}\nUsed: {capture['accepted'] or ''}\n"
                     f"Status: {capture['status']}\n{titles}")[:1800]
         if kind in {"correction", "clarification"}:
             return await self.correct_capture(user_id, capture_id, text, task_id)
-        if kind == "category":
+        if kind in {"category", "date"}:
             from .categories import CATEGORIES, INBOX
-            category = next((name for name in [INBOX] + [c.name for c in CATEGORIES]
-                             if name.casefold() == text.strip().casefold()), None)
-            if not category:
-                raise ValueError("Unknown category. Use /categories to see the available names.")
             ids = json.loads(capture["task_ids"])
             if task_id is None and len(ids) == 1:
                 task_id = ids[0]
             task = self.store.get(task_id) if task_id in ids else None
             if not task or task.user_id != user_id:
-                raise ValueError(f"Choose a task from this capture: {ids}. Reply with category #123: category name.")
+                raise ValueError(f"Choose a task from this capture: {ids}. Reply with {kind} #123: value.")
+            if kind == "date":
+                value = None if text.casefold() in {"none", "clear", "remove"} else extract_date(text)
+                if value is None and text.casefold() not in {"none", "clear", "remove"}:
+                    raise ValueError("Supply one valid date, such as October 20, 2026 or tomorrow; use date: none to clear it.")
+                self.store.set_date(task.id, value)
+                self.sync_requested.set()
+                await self._push(task)
+                return f"Date for {task.content}: {value or 'cleared'}."
+            category = next((name for name in [INBOX] + [c.name for c in CATEGORIES]
+                             if name.casefold() == text.strip().casefold()), None)
+            if not category:
+                raise ValueError("Unknown category. Use /categories to see the available names.")
             await self.move(task.id, category)
             return f"Moved {task.content} to {category}. Remembered the category example."
         if capture["status"] == "pending":
             return (await self.resolve_capture(user_id, capture_id, text)).message
-        return "Reply with correction: corrected title, category: category name, or details."
+        return "Reply with correction: corrected title, category: category name, date: date, or details."
 
     async def correct_task(self, user_id: int, task_id: int, intended: str) -> Task:
         intended = intended.strip()
@@ -527,6 +548,11 @@ class TaskService:
             raise ValueError("Supply one task title, 1–2000 characters")
         with self.store.transaction():
             self.store.set_content(task_id, intended)
+            if date_mentions(intended):
+                due_date = extract_date(intended)
+                if due_date is None:
+                    raise ValueError("The corrected wording has an invalid or conflicting date. Supply one date or use date: separately.")
+                self.store.set_date(task_id, due_date)
             self.store.teach_speech(user_id, task.content, intended, task.category, kind="example")
             for capture in self.store.db.execute("""SELECT * FROM speech_captures
                 WHERE user_id = ? ORDER BY created_at DESC LIMIT 200""", (user_id,)).fetchall():

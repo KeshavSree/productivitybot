@@ -201,6 +201,12 @@ def added_summary(added: list[Added]) -> str:
     for a in added:
         t = a.task
         line = f"Added **{short(t.content, 200)}** to {emoji(t.category)} **{t.category}**"
+        if t.due_date:
+            line += f" · Date: {t.due_date}"
+        else:
+            from .dates import date_mentions
+            if date_mentions(t.content):
+                line += " · Date unclear; supply one valid date."
         if t.category == INBOX:
             line += " (pick a category below)"
         lines.append(line)
@@ -310,7 +316,7 @@ class Tara(commands.Bot):
         if message.author.bot or not self.is_allowed(message.author):
             return
         feedback = re.fullmatch(
-            r"\s*(correction|clarification|category)(?:\s+#(\d+))?\s*:\s*(.*?)\s*",
+            r"\s*(correction|clarification|category|date)(?:\s+#(\d+))?\s*:\s*(.*?)\s*",
             message.content, re.I | re.S)
         reference = getattr(message, "reference", None)
         kwargs = {"mention_author": False, "allowed_mentions": discord.AllowedMentions.none()}

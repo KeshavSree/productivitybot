@@ -1,7 +1,7 @@
 """Minimal async Notion API client for the task board.
 
-The board is a Notion database with three properties:
-  Task (title), Category (select, one colored option per category), Done (checkbox).
+The board is a Notion database with task properties:
+  Task (title), Category (select), Done (checkbox), Date (date).
 Viewing it as a Board grouped by Category gives one colored column per category.
 """
 
@@ -15,6 +15,7 @@ VERSION = "2022-06-28"
 TITLE_PROP = "Task"
 CATEGORY_PROP = "Category"
 DONE_PROP = "Done"
+DATE_PROP = "Date"
 SOURCE_PROP = "Charles ID"  # Existing Notion recovery property; not a display name.
 
 
@@ -65,6 +66,7 @@ class Notion:
                 TITLE_PROP: {"title": {}},
                 CATEGORY_PROP: {"select": {"options": category_options()}},
                 DONE_PROP: {"checkbox": {}},
+                DATE_PROP: {"date": {}},
                 SOURCE_PROP: {"rich_text": {}},
             },
         })
@@ -78,6 +80,12 @@ class Notion:
         missing = [k for k in (TITLE_PROP, CATEGORY_PROP, DONE_PROP) if k not in props]
         if missing:
             raise NotionError(f"Database is missing properties {missing}; run scripts/setup_notion.py")
+        if DATE_PROP in props and props[DATE_PROP].get("type") != "date":
+            raise NotionError(f"{DATE_PROP} must be a Notion date property")
+        if DATE_PROP not in props:
+            await self._req("PATCH", f"/databases/{self.database_id}", {
+                "properties": {DATE_PROP: {"date": {}}},
+            })
         if SOURCE_PROP not in props:
             await self._req("PATCH", f"/databases/{self.database_id}", {
                 "properties": {SOURCE_PROP: {"rich_text": {}}},
@@ -134,4 +142,9 @@ class Notion:
     async def set_content(self, page_id: str, content: str) -> None:
         await self._req("PATCH", f"/pages/{page_id}", {"properties": {
             TITLE_PROP: {"title": [{"text": {"content": content[:2000]}}]},
+        }})
+
+    async def set_date(self, page_id: str, due_date: str | None) -> None:
+        await self._req("PATCH", f"/pages/{page_id}", {"properties": {
+            DATE_PROP: {"date": {"start": due_date} if due_date else None},
         }})
