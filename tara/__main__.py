@@ -46,9 +46,9 @@ async def run() -> None:
     # Storage identity stays stable through the package/display-name rename.
     store = Store(Path(os.getenv("DATA_DIR", "./data")) / "charles.db")
     service = TaskService(store, notion)
-    trigger = os.getenv("TRIGGER_WORD", "k").strip()
-    if trigger.lower() == "c":
-        trigger = "k"  # Migrate the previous Railway variable without requiring a dashboard edit.
+    trigger = os.getenv("TRIGGER_WORD", "t").strip()
+    if trigger.lower() in {"c", "k"}:
+        trigger = "t"  # Migrate older Railway settings without a dashboard edit.
     bot = Tara(service, env_int("TASK_CHANNEL_ID"), env_ids("ALLOWED_USER_IDS"), env_int("GUILD_ID"),
                trigger)
     runner = web.AppRunner(create_app(service, config), access_log=None, shutdown_timeout=15)

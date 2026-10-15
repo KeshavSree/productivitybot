@@ -236,7 +236,7 @@ class AddModal(discord.ui.Modal, title="Add tasks"):
 # ---- the bot -------------------------------------------------------------------
 
 def control_command(content: str, trigger: str) -> str | None:
-    """"k listen" starts listening mode, "k end" stops it."""
+    """"t listen" starts listening mode, "t end" stops it."""
     if not trigger:
         return None
     m = re.fullmatch(rf"\s*{re.escape(trigger)}\s*[:,]?\s*(listen|end|stop)\s*", content, re.IGNORECASE)
@@ -249,8 +249,8 @@ def control_command(content: str, trigger: str) -> str | None:
 def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> str | None:
     """Return the task text if this message is meant for Tara, else None.
 
-    A message is for Tara if it starts with the trigger word ("k do cs 373 hw",
-    "k: ...", "K, ..."), mentions the bot, or (with always=True) is in a DM or
+    A message is for Tara if it starts with the trigger word ("t do cs 373 hw",
+    "t: ...", "T, ..."), mentions the bot, or (with always=True) is in a DM or
     the tasks channel.
     """
     mention = re.compile(rf"<@!?{bot_id}>")
@@ -266,7 +266,7 @@ def task_text(content: str, bot_id: int, trigger: str, always: bool = False) -> 
 
 class Tara(commands.Bot):
     def __init__(self, svc: TaskService, task_channel_id: int | None, allowed: set[int], guild_id: int | None,
-                 trigger: str = "k"):
+                 trigger: str = "t"):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
@@ -275,7 +275,7 @@ class Tara(commands.Bot):
         self.allowed = allowed
         self.guild_id = guild_id
         self.trigger = trigger
-        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "k listen" mode
+        self.listening: set[tuple[int, int]] = set()  # (user id, channel id) in "t listen" mode
         self.tree.interaction_check = self._allowed_interaction  # type: ignore[method-assign]
 
     def is_allowed(self, user: discord.abc.User) -> bool:

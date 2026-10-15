@@ -77,13 +77,13 @@ async def test_on_message_listen_flow():
                                add_reaction=AsyncMock(), reply=AsyncMock())
 
     m = msg("random chat"); await bot.on_message(m); m.reply.assert_not_called()
-    m = msg("k listen"); await bot.on_message(m); assert "Listening" in m.reply.call_args.args[0]
+    m = msg("t listen"); await bot.on_message(m); assert "Listening" in m.reply.call_args.args[0]
     m = msg("do stat 417 hw"); await bot.on_message(m)
     m.add_reaction.assert_called_with("👍")
     assert m.reply.call_args.args[0] == "Added **Do stat 417 hw** to 🟪 **STAT 417**"
-    m = msg("k end"); await bot.on_message(m); assert m.reply.call_args.args[0] == "Stopped listening."
+    m = msg("t end"); await bot.on_message(m); assert m.reply.call_args.args[0] == "Stopped listening."
     m = msg("do interview"); await bot.on_message(m); m.reply.assert_not_called()
-    m = msg("k do cs 373 hw"); await bot.on_message(m)
+    m = msg("t do cs 373 hw"); await bot.on_message(m)
     assert m.reply.call_args.args[0] == "Added **Do cs 373 hw** to 🟦 **CS 373**"
     m = msg("Do cs 373 hw is complete"); await bot.on_message(m)
     assert m.reply.call_args.args[0] == "Marked **Do cs 373 hw** complete."

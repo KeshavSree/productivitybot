@@ -17,7 +17,7 @@ The Python package and entry point are now `tara` / `python -m tara`.
 `python -m charles` and `python -m kira` remain compatibility launchers for older Railway overrides.
 The existing `/data/charles.db` file and Notion `Charles ID` property are retained
 as storage identities to preserve tasks, speech memory, and page recovery.
-An existing `TRIGGER_WORD=c` setting automatically migrates to `k` at startup.
+Existing `TRIGGER_WORD=c` or `TRIGGER_WORD=k` settings automatically migrate to `t` at startup.
 
 Personal transcript correction is configured on Railway; the existing Shortcut
 actions and `text` / `request_id` body stay the same. See
